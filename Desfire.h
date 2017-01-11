@@ -140,6 +140,7 @@ public:
 	// Data manipulation commands
 	/////////////////////////////////////////////////////////////////////////////////////
 	StatusCode MIFARE_DESFIRE_ReadData(byte fid, uint32_t offset, uint32_t length, byte *backData, size_t *backLen);
+	StatusCode MIFARE_DESFIRE_GetValue(byte fid, int32_t *value);
 
 	/////////////////////////////////////////////////////////////////////////////////////
 	// Support functions

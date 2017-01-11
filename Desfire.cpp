@@ -324,6 +324,27 @@ DESFire::StatusCode DESFire::MIFARE_DESFIRE_ReadData(byte fid, uint32_t offset, 
 	return result;
 }
 
+DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetValue(byte fid, int32_t *value)
+{
+	StatusCode result;
+
+	byte buffer[64];
+	byte bufferSize = 64;
+	byte sendLen = 1;
+	size_t outSize = 0;
+
+	byte pcb = GetPCB();
+
+	buffer[0] = fid;
+
+	result = MIFARE_BlockExchangeWithData(pcb, 0x00, 0x6C, buffer, &sendLen, buffer, &bufferSize);
+	if (IsStatusCodeOK(result)) {
+		*value = ((uint32_t)buffer[0] | ((uint32_t)buffer[1] << 8) | ((uint32_t)buffer[2] << 16) | ((uint32_t)buffer[3] << 24));
+	}
+
+	return result;
+} // End MIFARE_DESFIRE_GetValue()
+
 DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetApplicationIds(mifare_desfire_aid_t *aids, byte *applicationCount)
 {
 	StatusCode result;
@@ -656,7 +677,8 @@ void DESFire::PICC_DumpMifareDesfireApplication(mifare_desfire_aid_t *aid)
 				case MDFT_STANDARD_DATA_FILE:
 				case MDFT_BACKUP_DATA_FILE:
 					Serial.print(F("      File Size      : "));
-					Serial.println(fileSettings.settings.standard_file.file_size);
+					Serial.print(fileSettings.settings.standard_file.file_size);
+					Serial.println(F(" bytes"));
 					break;
 				case MDFT_VALUE_FILE_WITH_BACKUP:
 					Serial.print(F("      Lower Limit    : "));
@@ -692,6 +714,7 @@ void DESFire::PICC_DumpMifareDesfireApplication(mifare_desfire_aid_t *aid)
 			switch (fileSettings.file_type) {
 				case MDFT_STANDARD_DATA_FILE:
 				case MDFT_BACKUP_DATA_FILE:
+				{
 					// Get file data
 					byte fileContent[fileSettings.settings.standard_file.file_size];
 					size_t fileContentLength = fileSettings.settings.standard_file.file_size;
@@ -714,12 +737,27 @@ void DESFire::PICC_DumpMifareDesfireApplication(mifare_desfire_aid_t *aid)
 								Serial.print(fileContent[iByte], HEX);
 							}
 							Serial.println();
-						} else {
+						}
+						else {
 							Serial.print(F("           "));
 							Serial.println(GetStatusCodeName(response));
 						}
 					}
-					break;
+				}
+				break;
+				case MDFT_VALUE_FILE_WITH_BACKUP:
+				{
+					// Get value
+					int32_t fileValue;
+					response = MIFARE_DESFIRE_GetValue(files[i], &fileValue);
+					Serial.print(F("      Value          : "));
+					if (IsStatusCodeOK(response)) {
+						Serial.println(fileValue);
+					} else {
+						Serial.println(GetStatusCodeName(response));
+					}
+				}
+				break;
 			}
 
 		} else {
