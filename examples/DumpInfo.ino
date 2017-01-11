@@ -72,6 +72,9 @@ void loop() {
   Serial.println();
 
   DESFire::StatusCode response;
+
+  // Make sure none DESFire status codes have DESFireStatus code to OK
+  response.desfire = DESFire::MF_OPERATION_OK;
   
   byte ats[16];
   byte atsLength = 16;
@@ -79,6 +82,8 @@ void loop() {
   if ( ! mfrc522.IsStatusCodeOK(response)) {
     Serial.println(F("Failed to get ATS!"));
     Serial.println(mfrc522.GetStatusCodeName(response));
+    Serial.println(response.mfrc522);
+    
     mfrc522.PICC_HaltA();
     return;
   }
@@ -120,41 +125,9 @@ void loop() {
     return;
   }
 
+  // Dump all applications
   for (byte aidIndex = 0; aidIndex < applicationCount; aidIndex++) {
-    response = mfrc522.MIFARE_DESFIRE_SelectApplication(&(aids[aidIndex]));
-    if ( ! mfrc522.IsStatusCodeOK(response)) {
-      Serial.print(F("Failed to select application"));
-      for (byte i = 0; i < 3; i++) {
-        if (aids[aidIndex].data[i] < 0x10)
-          Serial.print(F(" 0"));
-        else
-          Serial.print(F(" "));
-        Serial.print(aids[aidIndex].data[i], HEX);
-      }
-      Serial.println();
-      Serial.println(mfrc522.GetStatusCodeName(response));
-      mfrc522.PICC_HaltA();
-      return;
-    }
-
-    byte files[MIFARE_MAX_FILE_COUNT];
-    byte filesCount = 0;
-    response = mfrc522.MIFARE_DESFIRE_GetFileIDs(files, &filesCount);
-    if ( ! mfrc522.IsStatusCodeOK(response)) {
-      Serial.println(F("Failed to get file IDs. "));
-      Serial.println(mfrc522.GetStatusCodeName(response));
-      mfrc522.PICC_HaltA();
-      return;
-    }
-
-    DESFire::mifare_desfire_file_settings_t fileSettings[filesCount];
-    
-    for (byte idxFile = 0; idxFile < filesCount; idxFile++) {
-      
-      mfrc522.MIFARE_DESFIRE_GetFileSettings(&(files[idxFile]), &(fileSettings[idxFile]));
-    }
-
-    mfrc522.PICC_DumpMifareDesfireApplication(&(aids[aidIndex]), files, &filesCount, fileSettings);
+    mfrc522.PICC_DumpMifareDesfireApplication(&(aids[aidIndex]));
   }
   
   // Call PICC_HaltA()

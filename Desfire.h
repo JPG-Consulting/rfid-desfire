@@ -153,7 +153,7 @@ public:
 	// Functions for debugging
 	/////////////////////////////////////////////////////////////////////////////////////
 	void PICC_DumpMifareDesfireVersion(MIFARE_DESFIRE_Version_t *versionInfo);
-	void PICC_DumpMifareDesfireApplication(mifare_desfire_aid_t *aid, byte *files, byte *filesCount, mifare_desfire_file_settings_t *fileSettings);
+	void PICC_DumpMifareDesfireApplication(mifare_desfire_aid_t *aid);
 
 protected:
 	/////////////////////////////////////////////////////////////////////////////////////

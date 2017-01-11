@@ -18,6 +18,7 @@ MFRC522::StatusCode DESFire::PICC_RequestATS(byte *atsBuffer, byte *atsLength)
 	result = PCD_TransceiveData(atsBuffer, 4, atsBuffer, atsLength, NULL, 0, true);
 	if (result != STATUS_OK) {
 		PICC_HaltA();
+		Serial.println("WTF???");
 		return result;
 	}
 
@@ -90,8 +91,10 @@ DESFire::StatusCode DESFire::MIFARE_BlockExchange(byte pcb, byte cid, byte cmd, 
 	result.desfire = (DesfireStatusCode)(buffer[2]);
 
 	// TODO: Sanity checks.
-	memcpy(backData, &buffer[2], bufferSize - 4);
-	*backLen = bufferSize - 4;
+	//memcpy(backData, &buffer[2], bufferSize - 4);
+	//*backLen = bufferSize - 4;
+	memcpy(backData, &buffer[3], bufferSize - 5);
+	*backLen = bufferSize - 5;
 
 	return result;
 } // End MIFARE_BlockExchange()
@@ -132,8 +135,10 @@ DESFire::StatusCode DESFire::MIFARE_BlockExchangeWithData(byte pcb, byte cid, by
 	result.desfire = (DesfireStatusCode)(buffer[2]);
 
 	// TODO: Sanity checks.
-	memcpy(backData, &buffer[2], bufferSize - 4);
-	*backLen = bufferSize - 4;
+	//memcpy(backData, &buffer[2], bufferSize - 4);
+	//*backLen = bufferSize - 4;
+	memcpy(backData, &buffer[3], bufferSize - 5);
+	*backLen = bufferSize - 5;
 
 	return result;
 } // End MIFARE_BlockExchangeWithData()
@@ -141,58 +146,54 @@ DESFire::StatusCode DESFire::MIFARE_BlockExchangeWithData(byte pcb, byte cid, by
 DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetVersion(MIFARE_DESFIRE_Version_t *versionInfo)
 {
 	StatusCode result;
-
 	byte versionBuffer[64];
 	byte versionBufferSize = 64;
 
-	// PCB
-	// 0x0A = 0000 1010
+	byte pcb = GetPCB();
 
-	result = MIFARE_BlockExchange(0x0A, 0x00, 0x60, versionBuffer, &versionBufferSize);
+	result = MIFARE_BlockExchange(pcb, 0x00, 0x60, versionBuffer, &versionBufferSize);
 	if (result.mfrc522 == STATUS_OK) {
 		byte hardwareVersion[2];
 		byte storageSize;
 
-		versionInfo->hardware.vendor_id = versionBuffer[1];
-		versionInfo->hardware.type = versionBuffer[2];
-		versionInfo->hardware.subtype = versionBuffer[3];
-		versionInfo->hardware.version_major = versionBuffer[4];
-		versionInfo->hardware.version_minor = versionBuffer[5];
-		versionInfo->hardware.storage_size = versionBuffer[6];
-		versionInfo->hardware.protocol = versionBuffer[7];
+		versionInfo->hardware.vendor_id = versionBuffer[0];
+		versionInfo->hardware.type = versionBuffer[1];
+		versionInfo->hardware.subtype = versionBuffer[2];
+		versionInfo->hardware.version_major = versionBuffer[3];
+		versionInfo->hardware.version_minor = versionBuffer[4];
+		versionInfo->hardware.storage_size = versionBuffer[5];
+		versionInfo->hardware.protocol = versionBuffer[6];
 
-		if (versionBuffer[0] == 0xAF) {
+		if (result.desfire == MF_ADDITIONAL_FRAME) {
 			result = MIFARE_BlockExchange(0x0B, 0x00, 0xAF, versionBuffer, &versionBufferSize);
 			if (result.mfrc522 == STATUS_OK) {
-				versionInfo->software.vendor_id = versionBuffer[1];
-				versionInfo->software.type = versionBuffer[2];
-				versionInfo->software.subtype = versionBuffer[3];
-				versionInfo->software.version_major = versionBuffer[4];
-				versionInfo->software.version_minor = versionBuffer[5];
-				versionInfo->software.storage_size = versionBuffer[6];
-				versionInfo->software.protocol = versionBuffer[7];
-			}
-			else {
+				versionInfo->software.vendor_id = versionBuffer[0];
+				versionInfo->software.type = versionBuffer[1];
+				versionInfo->software.subtype = versionBuffer[2];
+				versionInfo->software.version_major = versionBuffer[3];
+				versionInfo->software.version_minor = versionBuffer[4];
+				versionInfo->software.storage_size = versionBuffer[5];
+				versionInfo->software.protocol = versionBuffer[6];
+			} else {
 				Serial.print("Failed to send AF: ");
 				Serial.println(GetStatusCodeName(result));
 			}
 
-			if (versionBuffer[0] == 0xAF) {
+			if (result.desfire == MF_ADDITIONAL_FRAME) {
 				byte nad = 0x60;
 				result = MIFARE_BlockExchange(0x0A, 0x00, 0xAF, versionBuffer, &versionBufferSize);
 				if (result.mfrc522 == STATUS_OK) {
-					memcpy(versionInfo->uid, &versionBuffer[1], 7);
-					memcpy(versionInfo->batch_number, &versionBuffer[8], 5);
-					versionInfo->production_week = versionBuffer[13];
-					versionInfo->production_year = versionBuffer[14];
-				}
-				else {
+					memcpy(versionInfo->uid, &versionBuffer[0], 7);
+					memcpy(versionInfo->batch_number, &versionBuffer[7], 5);
+					versionInfo->production_week = versionBuffer[12];
+					versionInfo->production_year = versionBuffer[13];
+				} else {
 					Serial.print("Failed to send AF: ");
 					Serial.println(GetStatusCodeName(result));
 				}
 			}
 
-			if (versionBuffer[0] == 0xAF) {
+			if (result.desfire == MF_ADDITIONAL_FRAME) {
 				Serial.println("GetVersion(): More data???");
 			}
 		}
@@ -211,42 +212,28 @@ DESFire::StatusCode DESFire::MIFARE_DESFIRE_SelectApplication(mifare_desfire_aid
 	byte buffer[64];
 	byte bufferSize = 3;
 
-	// PCB
-	// 0x0A = 0000 1010
+	byte pcb = GetPCB();
+	
 	buffer[0] = aid->data[0];
 	buffer[1] = aid->data[1];
 	buffer[2] = aid->data[2];
 
-	result = MIFARE_BlockExchangeWithData(0x0A, 0x00, 0x5A, buffer, &bufferSize, buffer, &bufferSize);
-	if (result.mfrc522 != STATUS_OK) {
-		return result;
-	}
-
-	if (buffer[0] == 0x00) {
-		result.desfire = MF_OPERATION_OK;
-	}
-
-	// TODO: Implement DESFire status codes
-	return result;
+	return MIFARE_BlockExchangeWithData(pcb, 0x00, 0x5A, buffer, &bufferSize, buffer, &bufferSize);
 }
 
 DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetFileIDs(byte *files, byte *filesCount)
 {
 	StatusCode result;
-
+	
 	byte buffer[255];
 	byte bufferSize = 255;
 
-	// PCB
-	// 0x0A = 0000 1010
+	byte pcb = GetPCB();
 
-	//result = MIFARE_BlockExchange(0x0A, 0x00, 0x6A, versionBuffer, &versionBufferSize);
-	result = MIFARE_BlockExchange(0x0B, 0x00, 0x6F, buffer, &bufferSize);
-	if (result.mfrc522 == STATUS_OK) {
-		*filesCount = bufferSize - 1;
-		memcpy(files, &(buffer[1]), *filesCount);
-	} else {
-		Serial.println("Get file IDs: Failure.");
+	result = MIFARE_BlockExchange(pcb, 0x00, 0x6F, buffer, &bufferSize);
+	if (IsStatusCodeOK(result)) {
+		*filesCount = bufferSize;
+		memcpy(files, &buffer, *filesCount);
 	}
 
 	return result;
@@ -256,43 +243,38 @@ DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetFileSettings(byte *file, mifare_d
 {
 	StatusCode result;
 
-	byte pcb = 0x0A;
 	byte buffer[64];
 	byte bufferSize = 64;
 	byte sendLen = 1;
 
-	// PCB
-	// 0x0A = 0000 1010
+	byte pcb = GetPCB();
+
 	buffer[0] = *file;
-	
-	pcb = GetPCB();
 
-	//result = MIFARE_BlockExchangeWithData(0x0A, 0x00, 0xF5, buffer, &bufferSize, versionBuffer, &versionBufferSize);
 	result = MIFARE_BlockExchangeWithData(pcb, 0x00, 0xF5, buffer, &sendLen, buffer, &bufferSize);
-	if (result.mfrc522 == STATUS_OK) {
-		fileSettings->file_type = buffer[1];
-		fileSettings->communication_settings = buffer[2];
-		fileSettings->access_rights = ((uint16_t)(buffer[3]) << 8) | (buffer[4]);
+	if (IsStatusCodeOK(result)) {
+		fileSettings->file_type = buffer[0];
+		fileSettings->communication_settings = buffer[1];
+		fileSettings->access_rights = ((uint16_t)(buffer[2]) << 8) | (buffer[3]);
 
-		switch (buffer[1]) {
+		switch (buffer[0]) {
 			case MDFT_STANDARD_DATA_FILE:
 			case MDFT_BACKUP_DATA_FILE:
-				//fileSettings->settings.standard_file.file_size = ((uint32_t)(buffer[5]) << 16) | ((uint32_t)(buffer[6]) << 8) | ((uint32_t)(buffer[7]));
-				fileSettings->settings.standard_file.file_size = ((uint32_t)(buffer[5])) | ((uint32_t)(buffer[6]) << 8) | ((uint32_t)(buffer[7])  << 16);
+				fileSettings->settings.standard_file.file_size = ((uint32_t)(buffer[4])) | ((uint32_t)(buffer[5]) << 8) | ((uint32_t)(buffer[6])  << 16);
 				break;
 
 			case MDFT_VALUE_FILE_WITH_BACKUP:
-				fileSettings->settings.value_file.lower_limit = ((uint32_t)(buffer[5])) | ((uint32_t)(buffer[6]) << 8) | ((uint32_t)(buffer[7]) << 16) | ((uint32_t)(buffer[8]) << 24);
-				fileSettings->settings.value_file.upper_limit = ((uint32_t)(buffer[9])) | ((uint32_t)(buffer[10]) << 8) | ((uint32_t)(buffer[11]) << 16) | ((uint32_t)(buffer[12]) << 24);
-				fileSettings->settings.value_file.limited_credit_value = ((uint32_t)(buffer[13])) | ((uint32_t)(buffer[14]) << 8) | ((uint32_t)(buffer[15]) << 16) | ((uint32_t)(buffer[16]) << 24);
-				fileSettings->settings.value_file.limited_credit_enabled = buffer[17];
+				fileSettings->settings.value_file.lower_limit = ((uint32_t)(buffer[4])) | ((uint32_t)(buffer[5]) << 8) | ((uint32_t)(buffer[6]) << 16) | ((uint32_t)(buffer[7]) << 24);
+				fileSettings->settings.value_file.upper_limit = ((uint32_t)(buffer[8])) | ((uint32_t)(buffer[9]) << 8) | ((uint32_t)(buffer[10]) << 16) | ((uint32_t)(buffer[11]) << 24);
+				fileSettings->settings.value_file.limited_credit_value = ((uint32_t)(buffer[12])) | ((uint32_t)(buffer[13]) << 8) | ((uint32_t)(buffer[14]) << 16) | ((uint32_t)(buffer[15]) << 24);
+				fileSettings->settings.value_file.limited_credit_enabled = buffer[16];
 				break;
 
 			case MDFT_LINEAR_RECORD_FILE_WITH_BACKUP:
 			case MDFT_CYCLIC_RECORD_FILE_WITH_BACKUP:
-				fileSettings->settings.record_file.record_size = ((uint32_t)(buffer[5])) | ((uint32_t)(buffer[6]) << 8) | ((uint32_t)(buffer[7]) << 16);
-				fileSettings->settings.record_file.max_number_of_records = ((uint32_t)(buffer[8])) | ((uint32_t)(buffer[9]) << 8) | ((uint32_t)(buffer[10]) << 16);
-				fileSettings->settings.record_file.current_number_of_records = ((uint32_t)(buffer[11])) | ((uint32_t)(buffer[12]) << 8) | ((uint32_t)(buffer[13]) << 16);
+				fileSettings->settings.record_file.record_size = ((uint32_t)(buffer[4])) | ((uint32_t)(buffer[5]) << 8) | ((uint32_t)(buffer[6]) << 16);
+				fileSettings->settings.record_file.max_number_of_records = ((uint32_t)(buffer[7])) | ((uint32_t)(buffer[8]) << 8) | ((uint32_t)(buffer[9]) << 16);
+				fileSettings->settings.record_file.current_number_of_records = ((uint32_t)(buffer[10])) | ((uint32_t)(buffer[11]) << 8) | ((uint32_t)(buffer[12]) << 16);
 				break;
 
 			default:
@@ -300,23 +282,6 @@ DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetFileSettings(byte *file, mifare_d
 				result.mfrc522 = STATUS_ERROR;
 				return result;
 		}
-		
-		//Serial.println("Get file Settings: Success.");
-		//Serial.print("Buffer size: ");
-		//Serial.println(bufferSize);
-		//
-		//Serial.print(F("File Settings:"));
-		//for (byte i = 0; i < bufferSize; i++) {
-		//	if (buffer[i] < 0x10)
-		//		Serial.print(F(" 0"));
-		//	else
-		//		Serial.print(F(" "));
-		//	Serial.print(buffer[i], HEX);
-		//}
-		//Serial.println();
-	} else {
-		Serial.print("Get file Settings: ");
-		Serial.println(GetStatusCodeName(result));
 	}
 
 	return result;
@@ -326,13 +291,13 @@ DESFire::StatusCode DESFire::MIFARE_DESFIRE_ReadData(byte fid, uint32_t offset, 
 {
 	StatusCode result;
 
-	byte pcb = 0x0A;
 	byte buffer[64];
 	byte bufferSize = 64;
 	byte sendLen = 7;
+	size_t outSize = 0;
 
-	// PCB
-	// 0x0A = 0000 1010
+	byte pcb = GetPCB();
+
 	buffer[0] = fid;
 	buffer[1] = (offset & 0x00000F);
 	buffer[2] = (offset & 0x00FF00) >> 8;
@@ -341,42 +306,19 @@ DESFire::StatusCode DESFire::MIFARE_DESFIRE_ReadData(byte fid, uint32_t offset, 
 	buffer[5] = (length & 0x00FF00) >> 8;
 	buffer[6] = (length & 0xFF0000) >> 16;
 	
-
-	//Serial.print(F("Data to send:"));
-	//for (byte i = 1; i < sendLen; i++) {
-	//	if (buffer[i] < 0x10)
-	//		Serial.print(F(" 0"));
-	//	else
-	//		Serial.print(F(" "));
-	//	Serial.print(buffer[i], HEX);
-	//}
-	//Serial.println();
-
-	pcb = GetPCB();
-	
 	result = MIFARE_BlockExchangeWithData(pcb, 0x00, 0xBD, buffer, &sendLen, buffer, &bufferSize);
 	if (result.mfrc522 == STATUS_OK) {
-		Serial.print(F("Status code: "));
-		if (buffer[0] < 0x10)
-			Serial.print(F("0"));
-		Serial.println(buffer[0], HEX);
-		Serial.println(F("ReadData: success."));
+		do {
+			// Copy the data
+			memcpy(backData + outSize, buffer, bufferSize);
+			outSize += bufferSize;
+			*backLen = outSize;
 
-		if (buffer[0] == 0x00 || buffer[0] == 0xAF) {
-			Serial.print(F("Data received:"));
-			for (byte i = 1; i < bufferSize; i++) {
-				if (buffer[i] < 0x10)
-					Serial.print(F(" 0"));
-				else
-					Serial.print(F(" "));
-				Serial.print(buffer[i], HEX);
+			if (result.desfire == MF_ADDITIONAL_FRAME) {
+				pcb = GetPCB();
+				result = MIFARE_BlockExchange(pcb, 0x00, 0xAF, buffer, &bufferSize);
 			}
-			Serial.println();
-		}
-	}
-	else {
-		Serial.print("ReadData(): ");
-		Serial.println(GetStatusCodeName(result));
+		}  while (result.mfrc522 == STATUS_OK && result.desfire == MF_ADDITIONAL_FRAME);
 	}
 
 	return result;
@@ -385,45 +327,34 @@ DESFire::StatusCode DESFire::MIFARE_DESFIRE_ReadData(byte fid, uint32_t offset, 
 DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetApplicationIds(mifare_desfire_aid_t *aids, byte *applicationCount)
 {
 	StatusCode result;
-
+	
 	byte buffer[255];
 	byte bufferSize = 255;
 
-	// PCB
-	// 0x0A = 0000 1010
+	byte pcb = GetPCB();
 
-	//result = MIFARE_BlockExchange(0x0A, 0x00, 0x6A, versionBuffer, &versionBufferSize);
-	result = MIFARE_BlockExchange(0x0B, 0x00, 0x6A, buffer, &bufferSize);
-	if (result.mfrc522 == STATUS_OK) {
-		result.desfire = (DesfireStatusCode)(buffer[0]);
-		if (bufferSize == 0x01) {
-			if (buffer[0] == 0x00) {
-				// Empty application list
-				Serial.println("No applications in card!");
-				result.desfire = MF_OPERATION_OK;
-			}
-			else {
-				// TODO: Implement MIFARE DESFIRE STATUS CODES
-				Serial.println("MIFARE_DESFIRE_GetApplicationIds(): Failed.");
-			}
+	result = MIFARE_BlockExchange(pcb, 0x00, 0x6A, buffer, &bufferSize);
+	if (IsStatusCodeOK(result)) {
+		if (bufferSize == 0x00) {
+			// Empty application list
 			return result;
 		}
 
 		// Applications are identified with a 3 byte application identifier(AID)
 		// we also received the status byte:
-		if (((bufferSize - 1) % 3) != 0) {
-			Serial.println("MIFARE_DESFIRE_GetApplicationIds(): Data is not a modulus of 3.");
+		if ((bufferSize % 3) != 0) {
+			Serial.println(F("MIFARE_DESFIRE_GetApplicationIds(): Data is not a modulus of 3."));
 			// TODO: Some kinf of failure
 			result.mfrc522 = STATUS_ERROR;
 			return result;
 		}
 
-		*applicationCount = (bufferSize - 1) / 3;
+		*applicationCount = bufferSize / 3;
 		
 		for (byte i = 0; i < *applicationCount; i++) {
-			aids[i].data[0] = buffer[1 + (i * 3)];
-			aids[i].data[1] = buffer[2 + (i * 3)];
-			aids[i].data[2] = buffer[3 + (i * 3)];
+			aids[i].data[0] = buffer[(i * 3)];
+			aids[i].data[1] = buffer[1 + (i * 3)];
+			aids[i].data[2] = buffer[2 + (i * 3)];
 		}
 	} else {
 		Serial.println("Application IDs: Failure.");
@@ -456,7 +387,7 @@ const __FlashStringHelper *DESFire::GetStatusCodeName(StatusCode code)
 		case MF_PARAMETER_ERROR:		return F("Value of the parameter(s) invalid.");
 		case MF_APPLICATION_NOT_FOUND:	return F("Requested AID not present on PICC.");
 		case MF_APPL_INTEGRITY_ERROR:	return F("Unrecoverable err within app.");
-		case MF_AUTHENTICATION_ERROR:	return F("Cur auth status doesnt allow req cmd.");
+		case MF_AUTHENTICATION_ERROR:	return F("Current authentication status doesn't allow requested command.");
 		case MF_ADDITIONAL_FRAME:		return F("Additional data frame to be sent.");
 		case MF_BOUNDARY_ERROR:			return F("Attempt to read/write beyond limits.");
 		case MF_PICC_INTEGRITY_ERROR:	return F("Unrecoverable error within PICC.");
@@ -654,8 +585,10 @@ void DESFire::PICC_DumpMifareDesfireVersion(MIFARE_DESFIRE_Version_t *versionInf
 	Serial.println(F("-------------------------------------------------------------"));
 }
 
-void DESFire::PICC_DumpMifareDesfireApplication(mifare_desfire_aid_t *aid, byte *files, byte *filesCount, mifare_desfire_file_settings_t *fileSettings)
+void DESFire::PICC_DumpMifareDesfireApplication(mifare_desfire_aid_t *aid)
 {
+	StatusCode response;
+
 	Serial.println(F("-- Desfire Application --------------------------------------"));
 	Serial.println(F("-------------------------------------------------------------"));
 	Serial.print(F("  AID                :"));
@@ -668,11 +601,32 @@ void DESFire::PICC_DumpMifareDesfireApplication(mifare_desfire_aid_t *aid, byte 
 	}
 	Serial.println();
 
+	// Select the current application.
+	response = MIFARE_DESFIRE_SelectApplication(aid);
+	if (!IsStatusCodeOK(response)) {
+		Serial.println(F("Error: Failed to select application."));
+		Serial.println(GetStatusCodeName(response));
+		Serial.println(F("-------------------------------------------------------------"));
+		return;
+	}
+
+	// Get the files
+	byte files[MIFARE_MAX_FILE_COUNT];
+	byte filesCount = 0;
+	response = MIFARE_DESFIRE_GetFileIDs(files, &filesCount);
+	if (!IsStatusCodeOK(response)) {
+		Serial.println(F("  Error: Failed to get application file IDs."));
+		Serial.print(F("  "));
+		Serial.println(GetStatusCodeName(response));
+		Serial.println(F("-------------------------------------------------------------"));
+		return;
+	}
+
 	// Number of files
 	Serial.print(F("  Num. Files         : "));
-	Serial.println(*filesCount);
+	Serial.println(filesCount);
 
-	for (byte i = 0; i < *filesCount; i++) {
+	for (byte i = 0; i < filesCount; i++) {
 		Serial.println(F("  ----------------------------------------------------------"));
 		Serial.println(F("  File Information"));
 		Serial.print(F("      File ID        : "));
@@ -680,54 +634,98 @@ void DESFire::PICC_DumpMifareDesfireApplication(mifare_desfire_aid_t *aid, byte 
 			Serial.print(F("0"));
 		Serial.println(files[i], HEX);
 
-		Serial.print(F("      File Type      : "));
-		if (fileSettings[i].file_type < 0x10)
-			Serial.print(F("0"));
-		Serial.println(fileSettings[i].file_type, HEX);
+		// Get file settings
+		mifare_desfire_file_settings_t fileSettings;
 
-		Serial.print(F("      Communication  : "));
-		if (fileSettings[i].communication_settings < 0x10)
-			Serial.print(F("0"));
-		Serial.println(fileSettings[i].communication_settings, HEX);
+		response = MIFARE_DESFIRE_GetFileSettings(&(files[i]), &fileSettings);
+		if (IsStatusCodeOK(response)) {
+			Serial.print(F("      File Type      : "));
+			if (fileSettings.file_type < 0x10)
+				Serial.print(F("0"));
+			Serial.println(fileSettings.file_type, HEX);
 
-		Serial.print(F("      Access rights  : "));
-		Serial.println(fileSettings[i].access_rights, HEX);
+			Serial.print(F("      Communication  : "));
+			if (fileSettings.communication_settings < 0x10)
+				Serial.print(F("0"));
+			Serial.println(fileSettings.communication_settings, HEX);
 
-		switch (fileSettings[i].file_type) {
-			case MDFT_STANDARD_DATA_FILE:
-			case MDFT_BACKUP_DATA_FILE:
-				Serial.print(F("      File Size      : "));
-				Serial.println(fileSettings[i].settings.standard_file.file_size);
-				break;
-			case MDFT_VALUE_FILE_WITH_BACKUP:
-				Serial.print(F("      Lower Limit    : "));
-				Serial.println(fileSettings[i].settings.value_file.lower_limit);
-				Serial.print(F("      Upper Limit    : "));
-				Serial.println(fileSettings[i].settings.value_file.upper_limit);
-				Serial.print(F("      Limited credit : "));
-				Serial.println(fileSettings[i].settings.value_file.limited_credit_value);
-				Serial.print(F("      Limited credit : "));
-				//
-				if (fileSettings[i].settings.value_file.limited_credit_enabled == 0x00)
-					Serial.print(F("Disabled ("));
-				else
-					Serial.print(F("Enabled ("));
-				if (fileSettings[i].settings.value_file.limited_credit_enabled < 0x10)
-					Serial.print(F("0"));
-				Serial.print(fileSettings[i].settings.value_file.limited_credit_enabled, HEX);
-				Serial.println(F(")"));
-				
-				break;
+			Serial.print(F("      Access rights  : "));
+			Serial.println(fileSettings.access_rights, HEX);
 
-			case MDFT_LINEAR_RECORD_FILE_WITH_BACKUP:
-			case MDFT_CYCLIC_RECORD_FILE_WITH_BACKUP:
-				Serial.print(F("      Record size    : "));
-				Serial.println(fileSettings[i].settings.record_file.record_size);
-				Serial.print(F("      max num records: "));
-				Serial.println(fileSettings[i].settings.record_file.max_number_of_records);
-				Serial.print(F("      num records    : "));
-				Serial.println(fileSettings[i].settings.record_file.current_number_of_records);
-				break;
+			switch (fileSettings.file_type) {
+				case MDFT_STANDARD_DATA_FILE:
+				case MDFT_BACKUP_DATA_FILE:
+					Serial.print(F("      File Size      : "));
+					Serial.println(fileSettings.settings.standard_file.file_size);
+					break;
+				case MDFT_VALUE_FILE_WITH_BACKUP:
+					Serial.print(F("      Lower Limit    : "));
+					Serial.println(fileSettings.settings.value_file.lower_limit);
+					Serial.print(F("      Upper Limit    : "));
+					Serial.println(fileSettings.settings.value_file.upper_limit);
+					Serial.print(F("      Limited credit : "));
+					Serial.println(fileSettings.settings.value_file.limited_credit_value);
+					Serial.print(F("      Limited credit : "));
+					
+					if (fileSettings.settings.value_file.limited_credit_enabled == 0x00)
+						Serial.print(F("Disabled ("));
+					else
+						Serial.print(F("Enabled ("));
+					if (fileSettings.settings.value_file.limited_credit_enabled < 0x10)
+						Serial.print(F("0"));
+					Serial.print(fileSettings.settings.value_file.limited_credit_enabled, HEX);
+					Serial.println(F(")"));
+	
+					break;
+
+				case MDFT_LINEAR_RECORD_FILE_WITH_BACKUP:
+				case MDFT_CYCLIC_RECORD_FILE_WITH_BACKUP:
+					Serial.print(F("      Record size    : "));
+					Serial.println(fileSettings.settings.record_file.record_size);
+					Serial.print(F("      max num records: "));
+					Serial.println(fileSettings.settings.record_file.max_number_of_records);
+					Serial.print(F("      num records    : "));
+					Serial.println(fileSettings.settings.record_file.current_number_of_records);
+					break;
+			}
+
+			switch (fileSettings.file_type) {
+				case MDFT_STANDARD_DATA_FILE:
+				case MDFT_BACKUP_DATA_FILE:
+					// Get file data
+					byte fileContent[fileSettings.settings.standard_file.file_size];
+					size_t fileContentLength = fileSettings.settings.standard_file.file_size;
+					response = MIFARE_DESFIRE_ReadData(files[i], 0, fileSettings.settings.standard_file.file_size, fileContent, &fileContentLength);
+					if (response.mfrc522 == STATUS_OK) {
+						Serial.println(F("      ------------------------------------------------------"));
+						Serial.println(F("      Data"));
+
+						if (response.desfire == MF_OPERATION_OK || response.desfire == MF_ADDITIONAL_FRAME) {
+							for (unsigned int iByte = 0; iByte < fileContentLength; iByte++) {
+								if ((iByte % 16) == 0) {
+									if (iByte != 0)
+										Serial.println();
+									Serial.print(F("           "));
+								}
+								if (fileContent[iByte] < 0x10)
+									Serial.print(F(" 0"));
+								else
+									Serial.print(F(" "));
+								Serial.print(fileContent[iByte], HEX);
+							}
+							Serial.println();
+						} else {
+							Serial.print(F("           "));
+							Serial.println(GetStatusCodeName(response));
+						}
+					}
+					break;
+			}
+
+		} else {
+			Serial.println(F("      Error: Failed to get file settings."));
+			Serial.print(F("      "));
+			Serial.println(GetStatusCodeName(response));
 		}
 	}
 
