@@ -82,6 +82,11 @@ public:
 		uint8_t data[3];
 	} mifare_desfire_aid_t;
 
+	typedef struct {
+		MFRC522::StatusCode mfrc522;
+		DesfireStatusCode   desfire;
+	} StatusCode;
+
 	// A struct used for passing a MIFARE DESFire Version 
 	typedef struct {
 		uint8_t file_type;
@@ -106,9 +111,6 @@ public:
 		} settings;
 	} mifare_desfire_file_settings_t;
 
-	//
-	byte last_pcb = 0x0B;
-
 	/////////////////////////////////////////////////////////////////////////////////////
 	// Functions for setting up the Arduino
 	/////////////////////////////////////////////////////////////////////////////////////
@@ -119,8 +121,8 @@ public:
 	/////////////////////////////////////////////////////////////////////////////////////
 	// ISO/IEC 14443 functions not currentlly present in MFRC522 library
 	/////////////////////////////////////////////////////////////////////////////////////
-	StatusCode PICC_RequestATS(byte *atsBuffer, byte *atsLength);
-	StatusCode PICC_ProtocolAndParameterSelection(byte cid, byte pps0, byte pps1 = 0x00);
+	MFRC522::StatusCode PICC_RequestATS(byte *atsBuffer, byte *atsLength);
+	MFRC522::StatusCode PICC_ProtocolAndParameterSelection(byte cid, byte pps0, byte pps1 = 0x00);
 
 	/////////////////////////////////////////////////////////////////////////////////////
 	// Functions for MIFARE DESFire
@@ -133,10 +135,19 @@ public:
 	StatusCode MIFARE_DESFIRE_GetFileIDs(byte *files, byte *filesCount);
 	StatusCode MIFARE_DESFIRE_GetFileSettings(byte *file, mifare_desfire_file_settings_t *fileSettings);
 
+	
+	/////////////////////////////////////////////////////////////////////////////////////
+	// Data manipulation commands
+	/////////////////////////////////////////////////////////////////////////////////////
+	StatusCode MIFARE_DESFIRE_ReadData(byte fid, uint32_t offset, uint32_t length, byte *backData, size_t *backLen);
+
 	/////////////////////////////////////////////////////////////////////////////////////
 	// Support functions
 	/////////////////////////////////////////////////////////////////////////////////////
 	static const __FlashStringHelper *GetDesfireStatusCodeName(DesfireStatusCode code);
+	virtual const __FlashStringHelper *GetStatusCodeName(MFRC522::StatusCode code) { return MFRC522::GetStatusCodeName(code);  };
+	static const __FlashStringHelper *GetStatusCodeName(StatusCode code);
+	bool IsStatusCodeOK(StatusCode code);
 
 	/////////////////////////////////////////////////////////////////////////////////////
 	// Functions for debugging
@@ -144,6 +155,23 @@ public:
 	void PICC_DumpMifareDesfireVersion(MIFARE_DESFIRE_Version_t *versionInfo);
 	void PICC_DumpMifareDesfireApplication(mifare_desfire_aid_t *aid, byte *files, byte *filesCount, mifare_desfire_file_settings_t *fileSettings);
 
+protected:
+	/////////////////////////////////////////////////////////////////////////////////////
+	// Helper methods
+	/////////////////////////////////////////////////////////////////////////////////////
+	byte GetPCB() {
+		// 0A = 1010
+		// 0B = 1011
+		if (m_pcb == 0x0A)
+			m_pcb = 0x0B;
+		else
+			m_pcb = 0x0A;
+
+		return m_pcb;
+	};
+
+private:
+	byte m_pcb;
 };
 
 #endif

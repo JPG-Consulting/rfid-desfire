@@ -71,22 +71,24 @@ void loop() {
   // Show an extra line
   Serial.println();
 
-  MFRC522::StatusCode response;
+  DESFire::StatusCode response;
   
   byte ats[16];
   byte atsLength = 16;
-  response = mfrc522.PICC_RequestATS(ats, &atsLength);
-  if (response != MFRC522::STATUS_OK) {
+  response.mfrc522 = mfrc522.PICC_RequestATS(ats, &atsLength);
+  if ( ! mfrc522.IsStatusCodeOK(response)) {
     Serial.println(F("Failed to get ATS!"));
+    Serial.println(mfrc522.GetStatusCodeName(response));
     mfrc522.PICC_HaltA();
     return;
   }
 
   // TODO: Should do checks but since I know my DESFire allows and requires PPS...
   //       PPS1 is ommitted and, therefore, 0x00 is used (106kBd)
-  response = mfrc522.PICC_ProtocolAndParameterSelection(0x00, 0x11);
-  if (response != MFRC522::STATUS_OK) {
+  response.mfrc522 = mfrc522.PICC_ProtocolAndParameterSelection(0x00, 0x11);
+  if ( ! mfrc522.IsStatusCodeOK(response)) {
     Serial.println(F("Failed to perform protocol and parameter selection (PPS)!"));
+    Serial.println(mfrc522.GetStatusCodeName(response));
     mfrc522.PICC_HaltA();
     return;
   }
@@ -94,9 +96,9 @@ void loop() {
   // MIFARE DESFire should respond to a GetVersion command
   DESFire::MIFARE_DESFIRE_Version_t desfireVersion;
   response = mfrc522.MIFARE_DESFIRE_GetVersion(&desfireVersion);
-  if (response != MFRC522::STATUS_OK) {
+  if ( ! mfrc522.IsStatusCodeOK(response)) {
     Serial.println(F("Failed to get a response for GetVersion!"));
-    Serial.println(F("Is it really a MIFARE DESFire?"));
+    Serial.println(mfrc522.GetStatusCodeName(response));
     mfrc522.PICC_HaltA();
     return;
   }
@@ -111,16 +113,16 @@ void loop() {
   DESFire::mifare_desfire_aid_t aids[MIFARE_MAX_APPLICATION_COUNT];
   byte applicationCount = 0;
   response = mfrc522.MIFARE_DESFIRE_GetApplicationIds(aids, &applicationCount);
-  if (response != MFRC522::STATUS_OK) {
+  if ( ! mfrc522.IsStatusCodeOK(response)) {
     Serial.println(F("Failed to get application IDs!"));
-    Serial.println(F("Is your card still close to the reader?"));
+    Serial.println(mfrc522.GetStatusCodeName(response));
     mfrc522.PICC_HaltA();
     return;
   }
 
   for (byte aidIndex = 0; aidIndex < applicationCount; aidIndex++) {
     response = mfrc522.MIFARE_DESFIRE_SelectApplication(&(aids[aidIndex]));
-    if (response != MFRC522::STATUS_OK) {
+    if ( ! mfrc522.IsStatusCodeOK(response)) {
       Serial.print(F("Failed to select application"));
       for (byte i = 0; i < 3; i++) {
         if (aids[aidIndex].data[i] < 0x10)
@@ -130,6 +132,7 @@ void loop() {
         Serial.print(aids[aidIndex].data[i], HEX);
       }
       Serial.println();
+      Serial.println(mfrc522.GetStatusCodeName(response));
       mfrc522.PICC_HaltA();
       return;
     }
@@ -137,8 +140,9 @@ void loop() {
     byte files[MIFARE_MAX_FILE_COUNT];
     byte filesCount = 0;
     response = mfrc522.MIFARE_DESFIRE_GetFileIDs(files, &filesCount);
-    if (response != MFRC522::STATUS_OK) {
-      Serial.println(F("Failed to get file IDs."));
+    if ( ! mfrc522.IsStatusCodeOK(response)) {
+      Serial.println(F("Failed to get file IDs. "));
+      Serial.println(mfrc522.GetStatusCodeName(response));
       mfrc522.PICC_HaltA();
       return;
     }
@@ -152,23 +156,6 @@ void loop() {
 
     mfrc522.PICC_DumpMifareDesfireApplication(&(aids[aidIndex]), files, &filesCount, fileSettings);
   }
-
-  
-
-  // We are still in AID 0xFFFFFF
-  // -File 0×0 has to be a value file with free access for GetValue, holding the value 0×00 00 03, indicating the MAD version 3.
-  // -File 0×1 shall be configured as StandardDataFile with Free Read Access. This file holds the contact details of the Card Holder (user of the card) in CSV plain text.
-  // -File 0×2 shall be configured as StandardDataFile with Free Read Access. This file holds the contact details of the Card Publisher (owner of PICC Master Key) in CSV plain text.
-  // -Files 0×3 to 0xF are RFU and shall not be used within MIFARE DESFire AID 0xFF FF FF.
-  // -Application Software in Terminals (PCDs) shall ignore files 0×3 to 0xF.
-  //DESFire::MIFARE_DESFIRE_File_Settings_t fileSettings;
-  //byte fileId = 0x09;
-  //response = mfrc522.MIFARE_DESFIRE_GetFileSettings(&fileId, &fileSettings);
-  //if (response != MFRC522::STATUS_OK) {
-  //  Serial.println(F("Failed to get file settings."));
-  //  mfrc522.PICC_HaltA();
-  //  return;
-  //}
   
   // Call PICC_HaltA()
   mfrc522.PICC_HaltA();

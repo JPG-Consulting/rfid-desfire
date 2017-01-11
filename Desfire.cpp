@@ -33,7 +33,7 @@ MFRC522::StatusCode DESFire::PICC_ProtocolAndParameterSelection(byte cid,	///< T
                                                                 byte pps0,	///< PPS0
 	                                                            byte pps1	///< PPS1
 ) {
-	StatusCode result;
+	MFRC522::StatusCode result;
 
 	byte ppsBuffer[5];
 	byte ppsBufferSize = 5;
@@ -64,7 +64,7 @@ MFRC522::StatusCode DESFire::PICC_ProtocolAndParameterSelection(byte cid,	///< T
 /**
  * Documentation: http://read.pudn.com/downloads64/ebook/225463/M305_DESFireISO14443.pdf
  */
-MFRC522::StatusCode DESFire::MIFARE_BlockExchange(byte pcb, byte cid, byte cmd, byte *backData, byte *backLen)
+DESFire::StatusCode DESFire::MIFARE_BlockExchange(byte pcb, byte cid, byte cmd, byte *backData, byte *backLen)
 {
 	StatusCode result;
 
@@ -76,24 +76,27 @@ MFRC522::StatusCode DESFire::MIFARE_BlockExchange(byte pcb, byte cid, byte cmd, 
 	buffer[2] = cmd;
 
 	// Calculate CRC_A
-	result = PCD_CalculateCRC(buffer, 3, &buffer[3]);
-	if (result != STATUS_OK) {
+	result.mfrc522 = PCD_CalculateCRC(buffer, 3, &buffer[3]);
+	if (result.mfrc522 != STATUS_OK) {
 		return result;
 	}
 
-	result = PCD_TransceiveData(buffer, 5, buffer, &bufferSize);
-	if (result != STATUS_OK) {
+	result.mfrc522 = PCD_TransceiveData(buffer, 5, buffer, &bufferSize);
+	if (result.mfrc522 != STATUS_OK) {
 		return result;
 	}
+
+	// Set the DESFire status code
+	result.desfire = (DesfireStatusCode)(buffer[2]);
 
 	// TODO: Sanity checks.
 	memcpy(backData, &buffer[2], bufferSize - 4);
 	*backLen = bufferSize - 4;
 
-	return STATUS_OK;
+	return result;
 } // End MIFARE_BlockExchange()
 
-MFRC522::StatusCode DESFire::MIFARE_BlockExchangeWithData(byte pcb, byte cid, byte cmd, byte *sendData, byte *sendLen, byte *backData, byte *backLen)
+DESFire::StatusCode DESFire::MIFARE_BlockExchangeWithData(byte pcb, byte cid, byte cmd, byte *sendData, byte *sendLen, byte *backData, byte *backLen)
 {
 	StatusCode result;
 
@@ -115,24 +118,27 @@ MFRC522::StatusCode DESFire::MIFARE_BlockExchangeWithData(byte pcb, byte cid, by
 	}
 
 	// Calculate CRC_A
-	result = PCD_CalculateCRC(buffer, sendSize, &buffer[sendSize]);
-	if (result != STATUS_OK) {
+	result.mfrc522 = PCD_CalculateCRC(buffer, sendSize, &buffer[sendSize]);
+	if (result.mfrc522 != STATUS_OK) {
 		return result;
 	}
 
-	result = PCD_TransceiveData(buffer, sendSize + 2, buffer, &bufferSize);
-	if (result != STATUS_OK) {
+	result.mfrc522 = PCD_TransceiveData(buffer, sendSize + 2, buffer, &bufferSize);
+	if (result.mfrc522 != STATUS_OK) {
 		return result;
 	}
+
+	// Set the DESFire status code
+	result.desfire = (DesfireStatusCode)(buffer[2]);
 
 	// TODO: Sanity checks.
 	memcpy(backData, &buffer[2], bufferSize - 4);
 	*backLen = bufferSize - 4;
 
-	return STATUS_OK;
+	return result;
 } // End MIFARE_BlockExchangeWithData()
 
-MFRC522::StatusCode DESFire::MIFARE_DESFIRE_GetVersion(MIFARE_DESFIRE_Version_t *versionInfo)
+DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetVersion(MIFARE_DESFIRE_Version_t *versionInfo)
 {
 	StatusCode result;
 
@@ -143,7 +149,7 @@ MFRC522::StatusCode DESFire::MIFARE_DESFIRE_GetVersion(MIFARE_DESFIRE_Version_t 
 	// 0x0A = 0000 1010
 
 	result = MIFARE_BlockExchange(0x0A, 0x00, 0x60, versionBuffer, &versionBufferSize);
-	if (result == STATUS_OK) {
+	if (result.mfrc522 == STATUS_OK) {
 		byte hardwareVersion[2];
 		byte storageSize;
 
@@ -157,7 +163,7 @@ MFRC522::StatusCode DESFire::MIFARE_DESFIRE_GetVersion(MIFARE_DESFIRE_Version_t 
 
 		if (versionBuffer[0] == 0xAF) {
 			result = MIFARE_BlockExchange(0x0B, 0x00, 0xAF, versionBuffer, &versionBufferSize);
-			if (result == STATUS_OK) {
+			if (result.mfrc522 == STATUS_OK) {
 				versionInfo->software.vendor_id = versionBuffer[1];
 				versionInfo->software.type = versionBuffer[2];
 				versionInfo->software.subtype = versionBuffer[3];
@@ -174,7 +180,7 @@ MFRC522::StatusCode DESFire::MIFARE_DESFIRE_GetVersion(MIFARE_DESFIRE_Version_t 
 			if (versionBuffer[0] == 0xAF) {
 				byte nad = 0x60;
 				result = MIFARE_BlockExchange(0x0A, 0x00, 0xAF, versionBuffer, &versionBufferSize);
-				if (result == STATUS_OK) {
+				if (result.mfrc522 == STATUS_OK) {
 					memcpy(versionInfo->uid, &versionBuffer[1], 7);
 					memcpy(versionInfo->batch_number, &versionBuffer[8], 5);
 					versionInfo->production_week = versionBuffer[13];
@@ -198,7 +204,7 @@ MFRC522::StatusCode DESFire::MIFARE_DESFIRE_GetVersion(MIFARE_DESFIRE_Version_t 
 	return result;
 } // End MIFARE_DESFIRE_GetVersion
 
-MFRC522::StatusCode DESFire::MIFARE_DESFIRE_SelectApplication(mifare_desfire_aid_t *aid)
+DESFire::StatusCode DESFire::MIFARE_DESFIRE_SelectApplication(mifare_desfire_aid_t *aid)
 {
 	StatusCode result;
 
@@ -212,19 +218,19 @@ MFRC522::StatusCode DESFire::MIFARE_DESFIRE_SelectApplication(mifare_desfire_aid
 	buffer[2] = aid->data[2];
 
 	result = MIFARE_BlockExchangeWithData(0x0A, 0x00, 0x5A, buffer, &bufferSize, buffer, &bufferSize);
-	if (result != STATUS_OK) {
+	if (result.mfrc522 != STATUS_OK) {
 		return result;
 	}
 
 	if (buffer[0] == 0x00) {
-		return STATUS_OK;
+		result.desfire = MF_OPERATION_OK;
 	}
 
 	// TODO: Implement DESFire status codes
-	return STATUS_ERROR;
+	return result;
 }
 
-MFRC522::StatusCode DESFire::MIFARE_DESFIRE_GetFileIDs(byte *files, byte *filesCount)
+DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetFileIDs(byte *files, byte *filesCount)
 {
 	StatusCode result;
 
@@ -236,7 +242,7 @@ MFRC522::StatusCode DESFire::MIFARE_DESFIRE_GetFileIDs(byte *files, byte *filesC
 
 	//result = MIFARE_BlockExchange(0x0A, 0x00, 0x6A, versionBuffer, &versionBufferSize);
 	result = MIFARE_BlockExchange(0x0B, 0x00, 0x6F, buffer, &bufferSize);
-	if (result == STATUS_OK) {
+	if (result.mfrc522 == STATUS_OK) {
 		*filesCount = bufferSize - 1;
 		memcpy(files, &(buffer[1]), *filesCount);
 	} else {
@@ -246,7 +252,7 @@ MFRC522::StatusCode DESFire::MIFARE_DESFIRE_GetFileIDs(byte *files, byte *filesC
 	return result;
 } // End MIFARE_DESFIRE_GetFileIDs
 
-MFRC522::StatusCode DESFire::MIFARE_DESFIRE_GetFileSettings(byte *file, mifare_desfire_file_settings_t *fileSettings)
+DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetFileSettings(byte *file, mifare_desfire_file_settings_t *fileSettings)
 {
 	StatusCode result;
 
@@ -259,16 +265,11 @@ MFRC522::StatusCode DESFire::MIFARE_DESFIRE_GetFileSettings(byte *file, mifare_d
 	// 0x0A = 0000 1010
 	buffer[0] = *file;
 	
-	if (last_pcb == 0x0A) {
-		pcb = 0x0B;
-		last_pcb = 0x0B;
-	} else {
-		pcb = 0x0A;
-		last_pcb = 0x0A;
-	}
+	pcb = GetPCB();
+
 	//result = MIFARE_BlockExchangeWithData(0x0A, 0x00, 0xF5, buffer, &bufferSize, versionBuffer, &versionBufferSize);
 	result = MIFARE_BlockExchangeWithData(pcb, 0x00, 0xF5, buffer, &sendLen, buffer, &bufferSize);
-	if (result == STATUS_OK) {
+	if (result.mfrc522 == STATUS_OK) {
 		fileSettings->file_type = buffer[1];
 		fileSettings->communication_settings = buffer[2];
 		fileSettings->access_rights = ((uint16_t)(buffer[3]) << 8) | (buffer[4]);
@@ -296,7 +297,8 @@ MFRC522::StatusCode DESFire::MIFARE_DESFIRE_GetFileSettings(byte *file, mifare_d
 
 			default:
 				//return FAIL;
-				return STATUS_ERROR;
+				result.mfrc522 = STATUS_ERROR;
+				return result;
 		}
 		
 		//Serial.println("Get file Settings: Success.");
@@ -320,7 +322,67 @@ MFRC522::StatusCode DESFire::MIFARE_DESFIRE_GetFileSettings(byte *file, mifare_d
 	return result;
 } // End MIFARE_DESFIRE_GetFileSettings
 
-MFRC522::StatusCode DESFire::MIFARE_DESFIRE_GetApplicationIds(mifare_desfire_aid_t *aids, byte *applicationCount)
+DESFire::StatusCode DESFire::MIFARE_DESFIRE_ReadData(byte fid, uint32_t offset, uint32_t length, byte *backData, size_t *backLen)
+{
+	StatusCode result;
+
+	byte pcb = 0x0A;
+	byte buffer[64];
+	byte bufferSize = 64;
+	byte sendLen = 7;
+
+	// PCB
+	// 0x0A = 0000 1010
+	buffer[0] = fid;
+	buffer[1] = (offset & 0x00000F);
+	buffer[2] = (offset & 0x00FF00) >> 8;
+	buffer[3] = (offset & 0xFF0000) >> 16;
+	buffer[4] = (length & 0x0000FF);
+	buffer[5] = (length & 0x00FF00) >> 8;
+	buffer[6] = (length & 0xFF0000) >> 16;
+	
+
+	//Serial.print(F("Data to send:"));
+	//for (byte i = 1; i < sendLen; i++) {
+	//	if (buffer[i] < 0x10)
+	//		Serial.print(F(" 0"));
+	//	else
+	//		Serial.print(F(" "));
+	//	Serial.print(buffer[i], HEX);
+	//}
+	//Serial.println();
+
+	pcb = GetPCB();
+	
+	result = MIFARE_BlockExchangeWithData(pcb, 0x00, 0xBD, buffer, &sendLen, buffer, &bufferSize);
+	if (result.mfrc522 == STATUS_OK) {
+		Serial.print(F("Status code: "));
+		if (buffer[0] < 0x10)
+			Serial.print(F("0"));
+		Serial.println(buffer[0], HEX);
+		Serial.println(F("ReadData: success."));
+
+		if (buffer[0] == 0x00 || buffer[0] == 0xAF) {
+			Serial.print(F("Data received:"));
+			for (byte i = 1; i < bufferSize; i++) {
+				if (buffer[i] < 0x10)
+					Serial.print(F(" 0"));
+				else
+					Serial.print(F(" "));
+				Serial.print(buffer[i], HEX);
+			}
+			Serial.println();
+		}
+	}
+	else {
+		Serial.print("ReadData(): ");
+		Serial.println(GetStatusCodeName(result));
+	}
+
+	return result;
+}
+
+DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetApplicationIds(mifare_desfire_aid_t *aids, byte *applicationCount)
 {
 	StatusCode result;
 
@@ -332,25 +394,28 @@ MFRC522::StatusCode DESFire::MIFARE_DESFIRE_GetApplicationIds(mifare_desfire_aid
 
 	//result = MIFARE_BlockExchange(0x0A, 0x00, 0x6A, versionBuffer, &versionBufferSize);
 	result = MIFARE_BlockExchange(0x0B, 0x00, 0x6A, buffer, &bufferSize);
-	if (result == STATUS_OK) {
+	if (result.mfrc522 == STATUS_OK) {
+		result.desfire = (DesfireStatusCode)(buffer[0]);
 		if (bufferSize == 0x01) {
 			if (buffer[0] == 0x00) {
 				// Empty application list
 				Serial.println("No applications in card!");
-				return STATUS_OK;
+				result.desfire = MF_OPERATION_OK;
 			}
 			else {
 				// TODO: Implement MIFARE DESFIRE STATUS CODES
 				Serial.println("MIFARE_DESFIRE_GetApplicationIds(): Failed.");
-				return STATUS_ERROR;
 			}
+			return result;
 		}
 
 		// Applications are identified with a 3 byte application identifier(AID)
 		// we also received the status byte:
 		if (((bufferSize - 1) % 3) != 0) {
 			Serial.println("MIFARE_DESFIRE_GetApplicationIds(): Data is not a modulus of 3.");
-			return STATUS_ERROR;
+			// TODO: Some kinf of failure
+			result.mfrc522 = STATUS_ERROR;
+			return result;
 		}
 
 		*applicationCount = (bufferSize - 1) / 3;
@@ -362,45 +427,59 @@ MFRC522::StatusCode DESFire::MIFARE_DESFIRE_GetApplicationIds(mifare_desfire_aid
 		}
 	} else {
 		Serial.println("Application IDs: Failure.");
+		Serial.println(GetStatusCodeName(result));
 	}
 
 	return result;
 } // End MIFARE_DESFIRE_GetApplicationIds()
 
-  /**
-  * Returns a __FlashStringHelper pointer to a status code name.
-  *
-  * @return const __FlashStringHelper *
-  */
-const __FlashStringHelper *DESFire::GetDesfireStatusCodeName(DESFire::DesfireStatusCode code	///< One of the DesfireStatusCode enums.
-) {
-	switch (code) {
-		case MF_OPERATION_OK:			return F("successful operation.");
-		case MF_NO_CHANGES:				return F("no changes done to backup files.");
-		case MF_OUT_OF_EEPROM_ERROR:	return F("insufficient NV-Mem. to complete cmd.");
-		case MF_ILLEGAL_COMMAND_CODE:	return F("command code not supported.");
+/**
+ * Returns a __FlashStringHelper pointer to a status code name.
+ *
+ * @return const __FlashStringHelper *
+ */
+const __FlashStringHelper *DESFire::GetStatusCodeName(StatusCode code)
+{
+	if (code.mfrc522 != MFRC522::STATUS_OK) {
+		return MFRC522::GetStatusCodeName(code.mfrc522);
+	}
+
+	switch (code.desfire) {
+		case MF_OPERATION_OK:			return F("Successful operation.");
+		case MF_NO_CHANGES:				return F("No changes done to backup files.");
+		case MF_OUT_OF_EEPROM_ERROR:	return F("Insufficient NV-Mem. to complete cmd.");
+		case MF_ILLEGAL_COMMAND_CODE:	return F("Command code not supported.");
 		case MF_INTEGRITY_ERROR:		return F("CRC or MAC does not match data.");
-		case MF_NO_SUCH_KEY:			return F("invalid key number specified.");
-		case MF_LENGTH_ERROR:			return F("length of command string invalid.");
-		case MF_PERMISSION_ERROR:		return F("curr conf/status doesnt allow cmd.");
-		case MF_PARAMETER_ERROR:		return F("value of the parameter(s) invalid.");
-		case MF_APPLICATION_NOT_FOUND:	return F("requested AID not present on PICC.");
-		case MF_APPL_INTEGRITY_ERROR:	return F("unrecoverable err within app.");
-		case MF_AUTHENTICATION_ERROR:	return F("cur auth status doesnt allow req cmd.");
-		case MF_ADDITIONAL_FRAME:		return F("additional data frame to be sent.");
-		case MF_BOUNDARY_ERROR:			return F("attempt to read/write beyond limits.");
-		case MF_PICC_INTEGRITY_ERROR:	return F("unrecoverable error within PICC.");
-		case MF_COMMAND_ABORTED:		return F("previous command not fully completed.");
+		case MF_NO_SUCH_KEY:			return F("Invalid key number specified.");
+		case MF_LENGTH_ERROR:			return F("Length of command string invalid.");
+		case MF_PERMISSION_ERROR:		return F("Curr conf/status doesnt allow cmd.");
+		case MF_PARAMETER_ERROR:		return F("Value of the parameter(s) invalid.");
+		case MF_APPLICATION_NOT_FOUND:	return F("Requested AID not present on PICC.");
+		case MF_APPL_INTEGRITY_ERROR:	return F("Unrecoverable err within app.");
+		case MF_AUTHENTICATION_ERROR:	return F("Cur auth status doesnt allow req cmd.");
+		case MF_ADDITIONAL_FRAME:		return F("Additional data frame to be sent.");
+		case MF_BOUNDARY_ERROR:			return F("Attempt to read/write beyond limits.");
+		case MF_PICC_INTEGRITY_ERROR:	return F("Unrecoverable error within PICC.");
+		case MF_COMMAND_ABORTED:		return F("Previous command not fully completed.");
 		case MF_PICC_DISABLED_ERROR:	return F("PICC disabled by unrecoverable error.");
-		case MF_COUNT_ERROR:			return F("cant create more apps, already @ 28.");
-		case MF_DUPLICATE_ERROR:		return F("cant create dup. file/app.");
-		case MF_EEPROM_ERROR:			return F("couldnt complete NV-write operation.");
-		case MF_FILE_NOT_FOUND:			return F("specified file number doesnt exist.");
-		case MF_FILE_INTEGRITY_ERROR:	return F("unrecoverable error within file.");
+		case MF_COUNT_ERROR:			return F("Cant create more apps, already @ 28.");
+		case MF_DUPLICATE_ERROR:		return F("Cant create dup. file/app.");
+		case MF_EEPROM_ERROR:			return F("Couldnt complete NV-write operation.");
+		case MF_FILE_NOT_FOUND:			return F("Specified file number doesnt exist.");
+		case MF_FILE_INTEGRITY_ERROR:	return F("Unrecoverable error within file.");
 		default:						return F("Unknown error");
 	}
-} // End GetDesfireStatusCodeName()
+} // End GetStatusCodeName()
 
+bool DESFire::IsStatusCodeOK(StatusCode code)
+{
+	if (code.mfrc522 != STATUS_OK)
+		return false;
+	if (code.desfire != MF_OPERATION_OK)
+		return false;
+
+	return true;
+} // End IsStatusCodeOK();
 
 void DESFire::PICC_DumpMifareDesfireVersion(MIFARE_DESFIRE_Version_t *versionInfo)
 {
