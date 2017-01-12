@@ -287,6 +287,44 @@ DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetFileSettings(byte *file, mifare_d
 	return result;
 } // End MIFARE_DESFIRE_GetFileSettings
 
+DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetKeySettings(byte *settings, byte *maxKeys)
+{
+	StatusCode result;
+
+	byte buffer[64];
+	byte bufferSize = 64;
+
+	byte pcb = GetPCB();
+
+	result = MIFARE_BlockExchange(pcb, 0x00, 0x45, buffer, &bufferSize);
+	if (IsStatusCodeOK(result)) {
+		*settings = buffer[0];
+		*maxKeys = buffer[1];
+	}
+
+	return result;
+} // End MIFARE_DESFIRE_GetKeySettings()
+
+DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetKeyVersion(byte key, byte *version)
+{
+	StatusCode result;
+
+	byte buffer[64];
+	byte bufferSize = 64;
+	byte sendLen = 1;
+
+	byte pcb = GetPCB();
+
+	buffer[0] = key;
+
+	result = MIFARE_BlockExchangeWithData(pcb, 0x00, 0x64, buffer, &sendLen, buffer, &bufferSize);
+	if (IsStatusCodeOK(result)) {
+		*version = buffer[0];
+	}
+
+	return result;
+}
+
 DESFire::StatusCode DESFire::MIFARE_DESFIRE_ReadData(byte fid, uint32_t offset, uint32_t length, byte *backData, size_t *backLen)
 {
 	StatusCode result;
@@ -653,6 +691,34 @@ void DESFire::PICC_DumpMifareDesfireApplication(mifare_desfire_aid_t *aid)
 		return;
 	}
 
+	// Get Key settings
+	byte keySettings;
+	byte keyCount = 0;
+	byte keyVersion[16];
+
+	response = MIFARE_DESFIRE_GetKeySettings(&keySettings, &keyCount);
+	if (IsStatusCodeOK(response)) {
+		Serial.print(F("  Key settings       : 0x"));
+		if (keySettings < 0x10)
+			Serial.print(F("0"));
+		Serial.println(keySettings, HEX);
+
+		Serial.print(F("  Max num keys       : "));
+		Serial.println(keyCount);
+
+		// Get key versions (No output will be outputed later)
+		for (byte ixKey = 0; ixKey < keyCount; ixKey++) {
+			response = MIFARE_DESFIRE_GetKeyVersion(ixKey, &(keyVersion[ixKey]));
+			if (!IsStatusCodeOK(response))
+				keyVersion[ixKey] = 0x00;
+		}
+		
+	} else {
+		Serial.println(F("  Error: Failed to get application key settings."));
+		// Just to be sure..
+		keyCount = 0;
+	}
+
 	// Get the files
 	byte files[MIFARE_MAX_FILE_COUNT];
 	byte filesCount = 0;
@@ -669,10 +735,26 @@ void DESFire::PICC_DumpMifareDesfireApplication(mifare_desfire_aid_t *aid)
 	Serial.print(F("  Num. Files         : "));
 	Serial.println(filesCount);
 
+	// Output key versions
+	if (keyCount > 0) {
+		Serial.println(F("  ----------------------------------------------------------"));
+		Serial.println(F("  Key Versions"));
+		for (byte ixKey = 0; ixKey < keyCount; ixKey++) {
+			Serial.print(F("      Key 0x"));
+			if (ixKey < 0x10)
+				Serial.print(F("0"));
+			Serial.print(ixKey, HEX);
+			Serial.print(F("       : 0x"));
+			if (keyVersion[ixKey] < 0x10)
+				Serial.print(F("0"));
+			Serial.println(keyVersion[ixKey], HEX);
+		}
+	}
+	
 	for (byte i = 0; i < filesCount; i++) {
 		Serial.println(F("  ----------------------------------------------------------"));
 		Serial.println(F("  File Information"));
-		Serial.print(F("      File ID        : "));
+		Serial.print(F("      File ID        : 0x"));
 		if (files[i] < 0x10)
 			Serial.print(F("0"));
 		Serial.println(files[i], HEX);

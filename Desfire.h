@@ -142,6 +142,8 @@ public:
 	StatusCode MIFARE_DESFIRE_SelectApplication(mifare_desfire_aid_t *aid);
 	StatusCode MIFARE_DESFIRE_GetFileIDs(byte *files, byte *filesCount);
 	StatusCode MIFARE_DESFIRE_GetFileSettings(byte *file, mifare_desfire_file_settings_t *fileSettings);
+	StatusCode MIFARE_DESFIRE_GetKeySettings(byte *settings, byte *maxKeys);
+	StatusCode MIFARE_DESFIRE_GetKeyVersion(byte key, byte *version);
 
 	
 	/////////////////////////////////////////////////////////////////////////////////////
