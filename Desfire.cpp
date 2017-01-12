@@ -423,6 +423,28 @@ const __FlashStringHelper *DESFire::GetStatusCodeName(StatusCode code)
 	}
 } // End GetStatusCodeName()
 
+const __FlashStringHelper *DESFire::GetFileTypeName(mifare_desfire_file_types fileType)
+{
+	switch (fileType) {
+		case MDFT_STANDARD_DATA_FILE:				return F("Standard data file.");
+		case MDFT_BACKUP_DATA_FILE:					return F("Backup data file.");
+		case MDFT_VALUE_FILE_WITH_BACKUP:			return F("Value file with backup.");
+		case MDFT_LINEAR_RECORD_FILE_WITH_BACKUP:	return F("Linear record file with backup.");
+		case MDFT_CYCLIC_RECORD_FILE_WITH_BACKUP:	return F("Cyclic record file with backup.");
+		default:									return F("Unknown file type.");
+	}
+} // End GetFileTypeName()
+
+const __FlashStringHelper *DESFire::GetCommunicationModeName(mifare_desfire_communication_modes communicationMode)
+{
+	switch (communicationMode) {
+		case MDCM_PLAIN:		return(F("Plain Communication."));
+		case MDCM_MACED:        return(F("Plain Comm secured by DES/3DES MACing."));
+		case MDCM_ENCIPHERED:   return(F("Fully DES/3DES enciphered comm."));
+		default:				return F("Unknown communication mode.");
+	}
+} // End GetCommunicationModeName()
+
 bool DESFire::IsStatusCodeOK(StatusCode code)
 {
 	if (code.mfrc522 != STATUS_OK)
@@ -660,15 +682,21 @@ void DESFire::PICC_DumpMifareDesfireApplication(mifare_desfire_aid_t *aid)
 
 		response = MIFARE_DESFIRE_GetFileSettings(&(files[i]), &fileSettings);
 		if (IsStatusCodeOK(response)) {
-			Serial.print(F("      File Type      : "));
+			Serial.print(F("      File Type      : 0x"));
 			if (fileSettings.file_type < 0x10)
 				Serial.print(F("0"));
-			Serial.println(fileSettings.file_type, HEX);
+			Serial.print(fileSettings.file_type, HEX);
+			Serial.print(F(" ("));
+			Serial.print(GetFileTypeName((mifare_desfire_file_types)fileSettings.file_type));
+			Serial.println(F(")"));
 
-			Serial.print(F("      Communication  : "));
+			Serial.print(F("      Communication  : 0x"));
 			if (fileSettings.communication_settings < 0x10)
 				Serial.print(F("0"));
-			Serial.println(fileSettings.communication_settings, HEX);
+			Serial.print(fileSettings.communication_settings, HEX);
+			Serial.print(F(" ("));
+			Serial.print(GetCommunicationModeName((mifare_desfire_communication_modes)fileSettings.communication_settings));
+			Serial.println(F(")"));
 
 			Serial.print(F("      Access rights  : "));
 			Serial.println(fileSettings.access_rights, HEX);

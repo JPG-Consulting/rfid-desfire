@@ -42,12 +42,20 @@ public:
 		MF_FILE_INTEGRITY_ERROR  = 0xF1   /* unrecoverable error within file */
 	};
 
+	// DESFire file types
 	enum mifare_desfire_file_types : byte {
 		MDFT_STANDARD_DATA_FILE = 0x00,
 		MDFT_BACKUP_DATA_FILE = 0x01,
 		MDFT_VALUE_FILE_WITH_BACKUP = 0x02,
 		MDFT_LINEAR_RECORD_FILE_WITH_BACKUP = 0x03,
 		MDFT_CYCLIC_RECORD_FILE_WITH_BACKUP = 0x04
+	};
+
+	// DESFire communication modes
+	enum mifare_desfire_communication_modes : byte {
+		MDCM_PLAIN      = 0x00,    /* Plain Communication */
+		MDCM_MACED      = 0x01,    /* Plain Comm secured by DES/3DES MACing */
+		MDCM_ENCIPHERED = 0x03    /* Fully DES/3DES enciphered comm. */
 	};
 
 	// A struct used for passing a MIFARE DESFire Version 
@@ -148,6 +156,8 @@ public:
 	static const __FlashStringHelper *GetDesfireStatusCodeName(DesfireStatusCode code);
 	virtual const __FlashStringHelper *GetStatusCodeName(MFRC522::StatusCode code) { return MFRC522::GetStatusCodeName(code);  };
 	static const __FlashStringHelper *GetStatusCodeName(StatusCode code);
+	static const __FlashStringHelper *GetFileTypeName(mifare_desfire_file_types fileType);
+	static const __FlashStringHelper *GetCommunicationModeName(mifare_desfire_communication_modes communicationMode);
 	bool IsStatusCodeOK(StatusCode code);
 
 	/////////////////////////////////////////////////////////////////////////////////////
