@@ -567,15 +567,19 @@ void DESFire::PICC_DumpMifareDesfireVersion(MIFARE_DESFIRE_Version_t *versionInf
 	}
 	Serial.println();
 
-	Serial.print(F("  Production week    : "));
+	Serial.print(F("  Production week    : 0x"));
+	if (versionInfo->production_week < 0x10)
+		Serial.print(F("0"));
 	Serial.println(versionInfo->production_week, HEX);
 
-	Serial.print(F("  Production year    : "));
+	Serial.print(F("  Production year    : 0x"));
+	if (versionInfo->production_year < 0x10)
+		Serial.print(F("0"));
 	Serial.println(versionInfo->production_year, HEX);
 
 	Serial.println(F("  ----------------------------------------------------------"));
 	Serial.println(F("  Hardware Information"));
-	Serial.print(F("      Vendor ID      : "));
+	Serial.print(F("      Vendor ID      : 0x"));
 	if (versionInfo->hardware.vendor_id < 0x10)
 		Serial.print(F("0"));
 	Serial.print(versionInfo->hardware.vendor_id, HEX);
@@ -583,12 +587,12 @@ void DESFire::PICC_DumpMifareDesfireVersion(MIFARE_DESFIRE_Version_t *versionInf
 		Serial.print(F(" (NXP)"));
 	Serial.println();
 
-	Serial.print(F("      Type           : "));
+	Serial.print(F("      Type           : 0x"));
 	if (versionInfo->hardware.type < 0x10)
 		Serial.print(F("0"));
 	Serial.println(versionInfo->hardware.type, HEX);
 
-	Serial.print(F("      Subtype        : "));
+	Serial.print(F("      Subtype        : 0x"));
 	if (versionInfo->hardware.subtype < 0x10)
 		Serial.print(F("0"));
 	Serial.println(versionInfo->hardware.subtype, HEX);
@@ -598,7 +602,9 @@ void DESFire::PICC_DumpMifareDesfireVersion(MIFARE_DESFIRE_Version_t *versionInf
 	Serial.print(F("."));
 	Serial.println(versionInfo->hardware.version_minor);
 
-	Serial.print(F("      Storage size   : "));
+	Serial.print(F("      Storage size   : 0x"));
+	if (versionInfo->hardware.storage_size < 0x10)
+		Serial.print(F("0"));
 	Serial.print(versionInfo->hardware.storage_size, HEX);
 	switch (versionInfo->hardware.storage_size) {
 	case 0x16:
@@ -613,14 +619,14 @@ void DESFire::PICC_DumpMifareDesfireVersion(MIFARE_DESFIRE_Version_t *versionInf
 	}
 	Serial.println();
 
-	Serial.print(F("      Protocol       : "));
+	Serial.print(F("      Protocol       : 0x"));
 	if (versionInfo->hardware.protocol < 0x10)
 		Serial.print(F("0"));
 	Serial.println(versionInfo->hardware.protocol, HEX);
 
 	Serial.println(F("  ----------------------------------------------------------"));
 	Serial.println(F("  Software Information"));
-	Serial.print(F("      Vendor ID      : "));
+	Serial.print(F("      Vendor ID      : 0x"));
 	if (versionInfo->software.vendor_id < 0x10)
 		Serial.print(F("0"));
 	Serial.print(versionInfo->software.vendor_id, HEX);
@@ -628,12 +634,12 @@ void DESFire::PICC_DumpMifareDesfireVersion(MIFARE_DESFIRE_Version_t *versionInf
 		Serial.print(F(" (NXP)"));
 	Serial.println();
 
-	Serial.print(F("      Type           : "));
+	Serial.print(F("      Type           : 0x"));
 	if (versionInfo->software.type < 0x10)
 		Serial.print(F("0"));
 	Serial.println(versionInfo->software.type, HEX);
 
-	Serial.print(F("      Subtype        : "));
+	Serial.print(F("      Subtype        : 0x"));
 	if (versionInfo->software.subtype < 0x10)
 		Serial.print(F("0"));
 	Serial.println(versionInfo->software.subtype, HEX);
@@ -643,7 +649,9 @@ void DESFire::PICC_DumpMifareDesfireVersion(MIFARE_DESFIRE_Version_t *versionInf
 	Serial.print(F("."));
 	Serial.println(versionInfo->software.version_minor);
 
-	Serial.print(F("      Storage size   : "));
+	Serial.print(F("      Storage size   : 0x"));
+	if (versionInfo->software.storage_size < 0x10)
+		Serial.print(F("0"));
 	Serial.print(versionInfo->software.storage_size, HEX);
 	switch (versionInfo->software.storage_size) {
 	case 0x16:
@@ -658,7 +666,7 @@ void DESFire::PICC_DumpMifareDesfireVersion(MIFARE_DESFIRE_Version_t *versionInf
 	}
 	Serial.println();
 
-	Serial.print(F("      Protocol       : "));
+	Serial.print(F("      Protocol       : 0x"));
 	if (versionInfo->software.protocol < 0x10)
 		Serial.print(F("0"));
 	Serial.println(versionInfo->software.protocol, HEX);
@@ -780,7 +788,7 @@ void DESFire::PICC_DumpMifareDesfireApplication(mifare_desfire_aid_t *aid)
 			Serial.print(GetCommunicationModeName((mifare_desfire_communication_modes)fileSettings.communication_settings));
 			Serial.println(F(")"));
 
-			Serial.print(F("      Access rights  : "));
+			Serial.print(F("      Access rights  : 0x"));
 			Serial.println(fileSettings.access_rights, HEX);
 
 			switch (fileSettings.file_type) {
@@ -802,7 +810,7 @@ void DESFire::PICC_DumpMifareDesfireApplication(mifare_desfire_aid_t *aid)
 					if (fileSettings.settings.value_file.limited_credit_enabled == 0x00)
 						Serial.print(F("Disabled ("));
 					else
-						Serial.print(F("Enabled ("));
+						Serial.print(F("Enabled (0x"));
 					if (fileSettings.settings.value_file.limited_credit_enabled < 0x10)
 						Serial.print(F("0"));
 					Serial.print(fileSettings.settings.value_file.limited_credit_enabled, HEX);
