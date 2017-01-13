@@ -493,6 +493,75 @@ bool DESFire::IsStatusCodeOK(StatusCode code)
 	return true;
 } // End IsStatusCodeOK();
 
+void DESFire::PICC_DumpMifareDesfireMasterKey()
+{
+	StatusCode response;
+	mifare_desfire_aid_t aid;
+
+	aid.data[0] = 0x00;
+	aid.data[1] = 0x00;
+	aid.data[2] = 0x00;
+
+	Serial.println(F("-- Desfire Master Key ---------------------------------------"));
+	Serial.println(F("-------------------------------------------------------------"));
+	// Select the current application.
+	response = MIFARE_DESFIRE_SelectApplication(&aid);
+	if (!IsStatusCodeOK(response)) {
+		Serial.println(F("Error: Failed to select application."));
+		Serial.println(GetStatusCodeName(response));
+		Serial.println(F("-------------------------------------------------------------"));
+		return;
+	}
+
+	// Get Key settings
+	byte keySettings;
+	byte keyCount = 0;
+	byte keyVersion;
+
+	response = MIFARE_DESFIRE_GetKeySettings(&keySettings, &keyCount);
+	if (IsStatusCodeOK(response)) {
+		Serial.print(F("  Key settings       : 0x"));
+		if (keySettings < 0x10)
+			Serial.print(F("0"));
+		Serial.println(keySettings, HEX);
+
+		Serial.print(F("  Max num keys       : "));
+		Serial.println(keyCount);
+
+		// Output key versions
+		if (keyCount > 0) {
+			Serial.println(F("  ----------------------------------------------------------"));
+			Serial.println(F("  Key Versions"));
+
+			// Get key versions (No output will be outputed later)
+			for (byte ixKey = 0; ixKey < keyCount; ixKey++) {
+				response = MIFARE_DESFIRE_GetKeyVersion(ixKey, &keyVersion);
+				Serial.print(F("      Key 0x"));
+				if (ixKey < 0x10)
+					Serial.print(F("0"));
+				Serial.print(ixKey, HEX);
+				Serial.print(F("       : "));
+				
+				if (IsStatusCodeOK(response)) {
+					Serial.print(F("0x"));
+					if (keyVersion < 0x10)
+						Serial.print(F("0"));
+					Serial.println(keyVersion, HEX);
+				} else {
+					Serial.println(GetStatusCodeName(response));
+				}
+			}
+		}
+	}
+	else {
+		Serial.println(F("  Error: Failed to get application key settings."));
+		// Just to be sure..
+		keyCount = 0;
+	}
+
+	Serial.println(F("-------------------------------------------------------------"));
+} // End PICC_DumpMifareDesfireMasterKey()
+
 void DESFire::PICC_DumpMifareDesfireVersion(MIFARE_DESFIRE_Version_t *versionInfo)
 {
 	Serial.println(F("-- Desfire Information --------------------------------------"));

@@ -115,6 +115,9 @@ void loop() {
   //       a timeout will occur!
   mfrc522.PICC_DumpMifareDesfireVersion(&desfireVersion);
 
+  // Dump AID (0x000000)
+  mfrc522.PICC_DumpMifareDesfireMasterKey();
+
   DESFire::mifare_desfire_aid_t aids[MIFARE_MAX_APPLICATION_COUNT];
   byte applicationCount = 0;
   response = mfrc522.MIFARE_DESFIRE_GetApplicationIds(aids, &applicationCount);
