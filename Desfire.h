@@ -141,8 +141,6 @@ public:
 	/////////////////////////////////////////////////////////////////////////////////////
 	// Functions for MIFARE DESFire
 	/////////////////////////////////////////////////////////////////////////////////////
-	StatusCode MIFARE_BlockExchange(mifare_desfire_tag *tag, byte cmd, byte *backData = NULL, byte *backLen = NULL);
-	StatusCode MIFARE_BlockExchangeWithData(mifare_desfire_tag *tag, byte cmd, byte *sendData = NULL, byte *sendLen = NULL, byte *backData = NULL, byte *backLen = NULL);
 	StatusCode MIFARE_DESFIRE_GetVersion(mifare_desfire_tag *tag, MIFARE_DESFIRE_Version_t *versionInfo);
 	StatusCode MIFARE_DESFIRE_GetApplicationIds(mifare_desfire_tag *tag, mifare_desfire_aid_t *aids, byte *applicationCount);
 	StatusCode MIFARE_DESFIRE_SelectApplication(mifare_desfire_tag *tag, mifare_desfire_aid_t *aid);
@@ -179,7 +177,8 @@ protected:
 	/////////////////////////////////////////////////////////////////////////////////////
 	// Helper methods
 	/////////////////////////////////////////////////////////////////////////////////////
-	
+	StatusCode MIFARE_BlockExchange(mifare_desfire_tag *tag, byte cmd, byte *backData = NULL, byte *backLen = NULL);
+	StatusCode MIFARE_BlockExchangeWithData(mifare_desfire_tag *tag, byte cmd, byte *sendData = NULL, byte *sendLen = NULL, byte *backData = NULL, byte *backLen = NULL);
 };
 
 #endif
