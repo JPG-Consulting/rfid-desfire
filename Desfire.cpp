@@ -65,41 +65,12 @@ MFRC522::StatusCode DESFire::PICC_ProtocolAndParameterSelection(byte cid,	///< T
 /**
  * Documentation: http://read.pudn.com/downloads64/ebook/225463/M305_DESFireISO14443.pdf
  */
-DESFire::StatusCode DESFire::MIFARE_BlockExchange(byte pcb, byte cid, byte cmd, byte *backData, byte *backLen)
+DESFire::StatusCode DESFire::MIFARE_BlockExchange(mifare_desfire_tag *tag, byte cmd, byte *backData, byte *backLen)
 {
-	StatusCode result;
-
-	byte buffer[64];
-	byte bufferSize = 64;
-
-	buffer[0] = pcb;
-	buffer[1] = cid;
-	buffer[2] = cmd;
-
-	// Calculate CRC_A
-	result.mfrc522 = PCD_CalculateCRC(buffer, 3, &buffer[3]);
-	if (result.mfrc522 != STATUS_OK) {
-		return result;
-	}
-
-	result.mfrc522 = PCD_TransceiveData(buffer, 5, buffer, &bufferSize);
-	if (result.mfrc522 != STATUS_OK) {
-		return result;
-	}
-
-	// Set the DESFire status code
-	result.desfire = (DesfireStatusCode)(buffer[2]);
-
-	// TODO: Sanity checks.
-	//memcpy(backData, &buffer[2], bufferSize - 4);
-	//*backLen = bufferSize - 4;
-	memcpy(backData, &buffer[3], bufferSize - 5);
-	*backLen = bufferSize - 5;
-
-	return result;
+	return MIFARE_BlockExchangeWithData(tag, cmd, NULL, NULL, backData, backLen);
 } // End MIFARE_BlockExchange()
 
-DESFire::StatusCode DESFire::MIFARE_BlockExchangeWithData(byte pcb, byte cid, byte cmd, byte *sendData, byte *sendLen, byte *backData, byte *backLen)
+DESFire::StatusCode DESFire::MIFARE_BlockExchangeWithData(mifare_desfire_tag *tag, byte cmd, byte *sendData, byte *sendLen, byte *backData, byte *backLen)
 {
 	StatusCode result;
 
@@ -107,8 +78,8 @@ DESFire::StatusCode DESFire::MIFARE_BlockExchangeWithData(byte pcb, byte cid, by
 	byte bufferSize = 64;
 	byte sendSize = 3;
 
-	buffer[0] = pcb;
-	buffer[1] = cid;
+	buffer[0] = tag->pcb;
+	buffer[1] = tag->cid;
 	buffer[2] = cmd;
 
 	// Append data if available
@@ -117,8 +88,13 @@ DESFire::StatusCode DESFire::MIFARE_BlockExchangeWithData(byte pcb, byte cid, by
 			memcpy(&buffer[3], sendData, *sendLen);
 			sendSize = sendSize + *sendLen;
 		}
-
 	}
+
+	// Update the PCB
+	if (tag->pcb == 0x0A)
+		tag->pcb = 0x0B;
+	else
+		tag->pcb = 0x0A;
 
 	// Calculate CRC_A
 	result.mfrc522 = PCD_CalculateCRC(buffer, sendSize, &buffer[sendSize]);
@@ -134,24 +110,22 @@ DESFire::StatusCode DESFire::MIFARE_BlockExchangeWithData(byte pcb, byte cid, by
 	// Set the DESFire status code
 	result.desfire = (DesfireStatusCode)(buffer[2]);
 
-	// TODO: Sanity checks.
-	//memcpy(backData, &buffer[2], bufferSize - 4);
-	//*backLen = bufferSize - 4;
-	memcpy(backData, &buffer[3], bufferSize - 5);
-	*backLen = bufferSize - 5;
+	// Copy data to backData and backLen
+	if (backData != NULL && backLen != NULL) {
+		memcpy(backData, &buffer[3], bufferSize - 5);
+		*backLen = bufferSize - 5;
+	}
 
 	return result;
 } // End MIFARE_BlockExchangeWithData()
 
-DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetVersion(MIFARE_DESFIRE_Version_t *versionInfo)
+DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetVersion(mifare_desfire_tag *tag, MIFARE_DESFIRE_Version_t *versionInfo)
 {
 	StatusCode result;
 	byte versionBuffer[64];
 	byte versionBufferSize = 64;
 
-	byte pcb = GetPCB();
-
-	result = MIFARE_BlockExchange(pcb, 0x00, 0x60, versionBuffer, &versionBufferSize);
+	result = MIFARE_BlockExchange(tag, 0x60, versionBuffer, &versionBufferSize);
 	if (result.mfrc522 == STATUS_OK) {
 		byte hardwareVersion[2];
 		byte storageSize;
@@ -165,7 +139,7 @@ DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetVersion(MIFARE_DESFIRE_Version_t 
 		versionInfo->hardware.protocol = versionBuffer[6];
 
 		if (result.desfire == MF_ADDITIONAL_FRAME) {
-			result = MIFARE_BlockExchange(0x0B, 0x00, 0xAF, versionBuffer, &versionBufferSize);
+			result = MIFARE_BlockExchange(tag, 0xAF, versionBuffer, &versionBufferSize);
 			if (result.mfrc522 == STATUS_OK) {
 				versionInfo->software.vendor_id = versionBuffer[0];
 				versionInfo->software.type = versionBuffer[1];
@@ -181,7 +155,7 @@ DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetVersion(MIFARE_DESFIRE_Version_t 
 
 			if (result.desfire == MF_ADDITIONAL_FRAME) {
 				byte nad = 0x60;
-				result = MIFARE_BlockExchange(0x0A, 0x00, 0xAF, versionBuffer, &versionBufferSize);
+				result = MIFARE_BlockExchange(tag, 0xAF, versionBuffer, &versionBufferSize);
 				if (result.mfrc522 == STATUS_OK) {
 					memcpy(versionInfo->uid, &versionBuffer[0], 7);
 					memcpy(versionInfo->batch_number, &versionBuffer[7], 5);
@@ -205,32 +179,28 @@ DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetVersion(MIFARE_DESFIRE_Version_t 
 	return result;
 } // End MIFARE_DESFIRE_GetVersion
 
-DESFire::StatusCode DESFire::MIFARE_DESFIRE_SelectApplication(mifare_desfire_aid_t *aid)
+DESFire::StatusCode DESFire::MIFARE_DESFIRE_SelectApplication(mifare_desfire_tag *tag, mifare_desfire_aid_t *aid)
 {
 	StatusCode result;
 
 	byte buffer[64];
 	byte bufferSize = 3;
-
-	byte pcb = GetPCB();
 	
 	buffer[0] = aid->data[0];
 	buffer[1] = aid->data[1];
 	buffer[2] = aid->data[2];
 
-	return MIFARE_BlockExchangeWithData(pcb, 0x00, 0x5A, buffer, &bufferSize, buffer, &bufferSize);
+	return MIFARE_BlockExchangeWithData(tag, 0x5A, buffer, &bufferSize, buffer, &bufferSize);
 }
 
-DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetFileIDs(byte *files, byte *filesCount)
+DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetFileIDs(mifare_desfire_tag *tag, byte *files, byte *filesCount)
 {
 	StatusCode result;
 	
 	byte buffer[255];
 	byte bufferSize = 255;
 
-	byte pcb = GetPCB();
-
-	result = MIFARE_BlockExchange(pcb, 0x00, 0x6F, buffer, &bufferSize);
+	result = MIFARE_BlockExchange(tag, 0x6F, buffer, &bufferSize);
 	if (IsStatusCodeOK(result)) {
 		*filesCount = bufferSize;
 		memcpy(files, &buffer, *filesCount);
@@ -239,7 +209,7 @@ DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetFileIDs(byte *files, byte *filesC
 	return result;
 } // End MIFARE_DESFIRE_GetFileIDs
 
-DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetFileSettings(byte *file, mifare_desfire_file_settings_t *fileSettings)
+DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetFileSettings(mifare_desfire_tag *tag, byte *file, mifare_desfire_file_settings_t *fileSettings)
 {
 	StatusCode result;
 
@@ -247,11 +217,9 @@ DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetFileSettings(byte *file, mifare_d
 	byte bufferSize = 64;
 	byte sendLen = 1;
 
-	byte pcb = GetPCB();
-
 	buffer[0] = *file;
 
-	result = MIFARE_BlockExchangeWithData(pcb, 0x00, 0xF5, buffer, &sendLen, buffer, &bufferSize);
+	result = MIFARE_BlockExchangeWithData(tag, 0xF5, buffer, &sendLen, buffer, &bufferSize);
 	if (IsStatusCodeOK(result)) {
 		fileSettings->file_type = buffer[0];
 		fileSettings->communication_settings = buffer[1];
@@ -287,16 +255,14 @@ DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetFileSettings(byte *file, mifare_d
 	return result;
 } // End MIFARE_DESFIRE_GetFileSettings
 
-DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetKeySettings(byte *settings, byte *maxKeys)
+DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetKeySettings(mifare_desfire_tag *tag, byte *settings, byte *maxKeys)
 {
 	StatusCode result;
 
 	byte buffer[64];
 	byte bufferSize = 64;
 
-	byte pcb = GetPCB();
-
-	result = MIFARE_BlockExchange(pcb, 0x00, 0x45, buffer, &bufferSize);
+	result = MIFARE_BlockExchange(tag, 0x45, buffer, &bufferSize);
 	if (IsStatusCodeOK(result)) {
 		*settings = buffer[0];
 		*maxKeys = buffer[1];
@@ -305,7 +271,7 @@ DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetKeySettings(byte *settings, byte 
 	return result;
 } // End MIFARE_DESFIRE_GetKeySettings()
 
-DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetKeyVersion(byte key, byte *version)
+DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetKeyVersion(mifare_desfire_tag *tag, byte key, byte *version)
 {
 	StatusCode result;
 
@@ -313,11 +279,9 @@ DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetKeyVersion(byte key, byte *versio
 	byte bufferSize = 64;
 	byte sendLen = 1;
 
-	byte pcb = GetPCB();
-
 	buffer[0] = key;
 
-	result = MIFARE_BlockExchangeWithData(pcb, 0x00, 0x64, buffer, &sendLen, buffer, &bufferSize);
+	result = MIFARE_BlockExchangeWithData(tag, 0x64, buffer, &sendLen, buffer, &bufferSize);
 	if (IsStatusCodeOK(result)) {
 		*version = buffer[0];
 	}
@@ -325,7 +289,7 @@ DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetKeyVersion(byte key, byte *versio
 	return result;
 }
 
-DESFire::StatusCode DESFire::MIFARE_DESFIRE_ReadData(byte fid, uint32_t offset, uint32_t length, byte *backData, size_t *backLen)
+DESFire::StatusCode DESFire::MIFARE_DESFIRE_ReadData(mifare_desfire_tag *tag, byte fid, uint32_t offset, uint32_t length, byte *backData, size_t *backLen)
 {
 	StatusCode result;
 
@@ -333,8 +297,6 @@ DESFire::StatusCode DESFire::MIFARE_DESFIRE_ReadData(byte fid, uint32_t offset, 
 	byte bufferSize = 64;
 	byte sendLen = 7;
 	size_t outSize = 0;
-
-	byte pcb = GetPCB();
 
 	buffer[0] = fid;
 	buffer[1] = (offset & 0x00000F);
@@ -344,7 +306,7 @@ DESFire::StatusCode DESFire::MIFARE_DESFIRE_ReadData(byte fid, uint32_t offset, 
 	buffer[5] = (length & 0x00FF00) >> 8;
 	buffer[6] = (length & 0xFF0000) >> 16;
 	
-	result = MIFARE_BlockExchangeWithData(pcb, 0x00, 0xBD, buffer, &sendLen, buffer, &bufferSize);
+	result = MIFARE_BlockExchangeWithData(tag, 0xBD, buffer, &sendLen, buffer, &bufferSize);
 	if (result.mfrc522 == STATUS_OK) {
 		do {
 			// Copy the data
@@ -353,8 +315,7 @@ DESFire::StatusCode DESFire::MIFARE_DESFIRE_ReadData(byte fid, uint32_t offset, 
 			*backLen = outSize;
 
 			if (result.desfire == MF_ADDITIONAL_FRAME) {
-				pcb = GetPCB();
-				result = MIFARE_BlockExchange(pcb, 0x00, 0xAF, buffer, &bufferSize);
+				result = MIFARE_BlockExchange(tag, 0xAF, buffer, &bufferSize);
 			}
 		}  while (result.mfrc522 == STATUS_OK && result.desfire == MF_ADDITIONAL_FRAME);
 	}
@@ -362,7 +323,7 @@ DESFire::StatusCode DESFire::MIFARE_DESFIRE_ReadData(byte fid, uint32_t offset, 
 	return result;
 }
 
-DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetValue(byte fid, int32_t *value)
+DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetValue(mifare_desfire_tag *tag, byte fid, int32_t *value)
 {
 	StatusCode result;
 
@@ -371,11 +332,9 @@ DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetValue(byte fid, int32_t *value)
 	byte sendLen = 1;
 	size_t outSize = 0;
 
-	byte pcb = GetPCB();
-
 	buffer[0] = fid;
 
-	result = MIFARE_BlockExchangeWithData(pcb, 0x00, 0x6C, buffer, &sendLen, buffer, &bufferSize);
+	result = MIFARE_BlockExchangeWithData(tag, 0x6C, buffer, &sendLen, buffer, &bufferSize);
 	if (IsStatusCodeOK(result)) {
 		*value = ((uint32_t)buffer[0] | ((uint32_t)buffer[1] << 8) | ((uint32_t)buffer[2] << 16) | ((uint32_t)buffer[3] << 24));
 	}
@@ -383,16 +342,14 @@ DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetValue(byte fid, int32_t *value)
 	return result;
 } // End MIFARE_DESFIRE_GetValue()
 
-DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetApplicationIds(mifare_desfire_aid_t *aids, byte *applicationCount)
+DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetApplicationIds(mifare_desfire_tag *tag, mifare_desfire_aid_t *aids, byte *applicationCount)
 {
 	StatusCode result;
 	
 	byte buffer[255];
 	byte bufferSize = 255;
 
-	byte pcb = GetPCB();
-
-	result = MIFARE_BlockExchange(pcb, 0x00, 0x6A, buffer, &bufferSize);
+	result = MIFARE_BlockExchange(tag, 0x6A, buffer, &bufferSize);
 	if (IsStatusCodeOK(result)) {
 		if (bufferSize == 0x00) {
 			// Empty application list
@@ -493,7 +450,7 @@ bool DESFire::IsStatusCodeOK(StatusCode code)
 	return true;
 } // End IsStatusCodeOK();
 
-void DESFire::PICC_DumpMifareDesfireMasterKey()
+void DESFire::PICC_DumpMifareDesfireMasterKey(mifare_desfire_tag *tag)
 {
 	StatusCode response;
 	mifare_desfire_aid_t aid;
@@ -505,7 +462,7 @@ void DESFire::PICC_DumpMifareDesfireMasterKey()
 	Serial.println(F("-- Desfire Master Key ---------------------------------------"));
 	Serial.println(F("-------------------------------------------------------------"));
 	// Select the current application.
-	response = MIFARE_DESFIRE_SelectApplication(&aid);
+	response = MIFARE_DESFIRE_SelectApplication(tag, &aid);
 	if (!IsStatusCodeOK(response)) {
 		Serial.println(F("Error: Failed to select application."));
 		Serial.println(GetStatusCodeName(response));
@@ -518,7 +475,7 @@ void DESFire::PICC_DumpMifareDesfireMasterKey()
 	byte keyCount = 0;
 	byte keyVersion;
 
-	response = MIFARE_DESFIRE_GetKeySettings(&keySettings, &keyCount);
+	response = MIFARE_DESFIRE_GetKeySettings(tag, &keySettings, &keyCount);
 	if (IsStatusCodeOK(response)) {
 		Serial.print(F("  Key settings       : 0x"));
 		if (keySettings < 0x10)
@@ -535,7 +492,7 @@ void DESFire::PICC_DumpMifareDesfireMasterKey()
 
 			// Get key versions (No output will be outputed later)
 			for (byte ixKey = 0; ixKey < keyCount; ixKey++) {
-				response = MIFARE_DESFIRE_GetKeyVersion(ixKey, &keyVersion);
+				response = MIFARE_DESFIRE_GetKeyVersion(tag, ixKey, &keyVersion);
 				Serial.print(F("      Key 0x"));
 				if (ixKey < 0x10)
 					Serial.print(F("0"));
@@ -562,7 +519,7 @@ void DESFire::PICC_DumpMifareDesfireMasterKey()
 	Serial.println(F("-------------------------------------------------------------"));
 } // End PICC_DumpMifareDesfireMasterKey()
 
-void DESFire::PICC_DumpMifareDesfireVersion(MIFARE_DESFIRE_Version_t *versionInfo)
+void DESFire::PICC_DumpMifareDesfireVersion(mifare_desfire_tag *tag, MIFARE_DESFIRE_Version_t *versionInfo)
 {
 	Serial.println(F("-- Desfire Information --------------------------------------"));
 	Serial.println(F("-------------------------------------------------------------"));
@@ -743,7 +700,7 @@ void DESFire::PICC_DumpMifareDesfireVersion(MIFARE_DESFIRE_Version_t *versionInf
 	Serial.println(F("-------------------------------------------------------------"));
 }
 
-void DESFire::PICC_DumpMifareDesfireApplication(mifare_desfire_aid_t *aid)
+void DESFire::PICC_DumpMifareDesfireApplication(mifare_desfire_tag *tag, mifare_desfire_aid_t *aid)
 {
 	StatusCode response;
 
@@ -760,7 +717,7 @@ void DESFire::PICC_DumpMifareDesfireApplication(mifare_desfire_aid_t *aid)
 	Serial.println();
 
 	// Select the current application.
-	response = MIFARE_DESFIRE_SelectApplication(aid);
+	response = MIFARE_DESFIRE_SelectApplication(tag, aid);
 	if (!IsStatusCodeOK(response)) {
 		Serial.println(F("Error: Failed to select application."));
 		Serial.println(GetStatusCodeName(response));
@@ -773,7 +730,7 @@ void DESFire::PICC_DumpMifareDesfireApplication(mifare_desfire_aid_t *aid)
 	byte keyCount = 0;
 	byte keyVersion[16];
 
-	response = MIFARE_DESFIRE_GetKeySettings(&keySettings, &keyCount);
+	response = MIFARE_DESFIRE_GetKeySettings(tag, &keySettings, &keyCount);
 	if (IsStatusCodeOK(response)) {
 		Serial.print(F("  Key settings       : 0x"));
 		if (keySettings < 0x10)
@@ -785,7 +742,7 @@ void DESFire::PICC_DumpMifareDesfireApplication(mifare_desfire_aid_t *aid)
 
 		// Get key versions (No output will be outputed later)
 		for (byte ixKey = 0; ixKey < keyCount; ixKey++) {
-			response = MIFARE_DESFIRE_GetKeyVersion(ixKey, &(keyVersion[ixKey]));
+			response = MIFARE_DESFIRE_GetKeyVersion(tag, ixKey, &(keyVersion[ixKey]));
 			if (!IsStatusCodeOK(response))
 				keyVersion[ixKey] = 0x00;
 		}
@@ -799,7 +756,7 @@ void DESFire::PICC_DumpMifareDesfireApplication(mifare_desfire_aid_t *aid)
 	// Get the files
 	byte files[MIFARE_MAX_FILE_COUNT];
 	byte filesCount = 0;
-	response = MIFARE_DESFIRE_GetFileIDs(files, &filesCount);
+	response = MIFARE_DESFIRE_GetFileIDs(tag, files, &filesCount);
 	if (!IsStatusCodeOK(response)) {
 		Serial.println(F("  Error: Failed to get application file IDs."));
 		Serial.print(F("  "));
@@ -839,7 +796,7 @@ void DESFire::PICC_DumpMifareDesfireApplication(mifare_desfire_aid_t *aid)
 		// Get file settings
 		mifare_desfire_file_settings_t fileSettings;
 
-		response = MIFARE_DESFIRE_GetFileSettings(&(files[i]), &fileSettings);
+		response = MIFARE_DESFIRE_GetFileSettings(tag, &(files[i]), &fileSettings);
 		if (IsStatusCodeOK(response)) {
 			Serial.print(F("      File Type      : 0x"));
 			if (fileSettings.file_type < 0x10)
@@ -905,7 +862,7 @@ void DESFire::PICC_DumpMifareDesfireApplication(mifare_desfire_aid_t *aid)
 					// Get file data
 					byte fileContent[fileSettings.settings.standard_file.file_size];
 					size_t fileContentLength = fileSettings.settings.standard_file.file_size;
-					response = MIFARE_DESFIRE_ReadData(files[i], 0, fileSettings.settings.standard_file.file_size, fileContent, &fileContentLength);
+					response = MIFARE_DESFIRE_ReadData(tag, files[i], 0, fileSettings.settings.standard_file.file_size, fileContent, &fileContentLength);
 					if (response.mfrc522 == STATUS_OK) {
 						Serial.println(F("      ------------------------------------------------------"));
 						Serial.println(F("      Data"));
@@ -936,7 +893,7 @@ void DESFire::PICC_DumpMifareDesfireApplication(mifare_desfire_aid_t *aid)
 				{
 					// Get value
 					int32_t fileValue;
-					response = MIFARE_DESFIRE_GetValue(files[i], &fileValue);
+					response = MIFARE_DESFIRE_GetValue(tag, files[i], &fileValue);
 					Serial.print(F("      Value          : "));
 					if (IsStatusCodeOK(response)) {
 						Serial.println(fileValue);

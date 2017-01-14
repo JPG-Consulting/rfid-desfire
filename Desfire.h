@@ -119,6 +119,11 @@ public:
 		} settings;
 	} mifare_desfire_file_settings_t;
 
+	typedef struct {
+		byte cid;	// Card ID
+		byte pcb;	// Protocol Control Byte
+	} mifare_desfire_tag;
+
 	/////////////////////////////////////////////////////////////////////////////////////
 	// Functions for setting up the Arduino
 	/////////////////////////////////////////////////////////////////////////////////////
@@ -135,22 +140,22 @@ public:
 	/////////////////////////////////////////////////////////////////////////////////////
 	// Functions for MIFARE DESFire
 	/////////////////////////////////////////////////////////////////////////////////////
-	StatusCode MIFARE_BlockExchange(byte pcb, byte cid, byte cmd, byte *backData = NULL, byte *backLen = NULL);
-	StatusCode MIFARE_BlockExchangeWithData(byte pcb, byte cid, byte cmd, byte *sendData = NULL, byte *sendLen = NULL, byte *backData = NULL, byte *backLen = NULL);
-	StatusCode MIFARE_DESFIRE_GetVersion(MIFARE_DESFIRE_Version_t *versionInfo);
-	StatusCode MIFARE_DESFIRE_GetApplicationIds(mifare_desfire_aid_t *aids, byte *applicationCount);
-	StatusCode MIFARE_DESFIRE_SelectApplication(mifare_desfire_aid_t *aid);
-	StatusCode MIFARE_DESFIRE_GetFileIDs(byte *files, byte *filesCount);
-	StatusCode MIFARE_DESFIRE_GetFileSettings(byte *file, mifare_desfire_file_settings_t *fileSettings);
-	StatusCode MIFARE_DESFIRE_GetKeySettings(byte *settings, byte *maxKeys);
-	StatusCode MIFARE_DESFIRE_GetKeyVersion(byte key, byte *version);
+	StatusCode MIFARE_BlockExchange(mifare_desfire_tag *tag, byte cmd, byte *backData = NULL, byte *backLen = NULL);
+	StatusCode MIFARE_BlockExchangeWithData(mifare_desfire_tag *tag, byte cmd, byte *sendData = NULL, byte *sendLen = NULL, byte *backData = NULL, byte *backLen = NULL);
+	StatusCode MIFARE_DESFIRE_GetVersion(mifare_desfire_tag *tag, MIFARE_DESFIRE_Version_t *versionInfo);
+	StatusCode MIFARE_DESFIRE_GetApplicationIds(mifare_desfire_tag *tag, mifare_desfire_aid_t *aids, byte *applicationCount);
+	StatusCode MIFARE_DESFIRE_SelectApplication(mifare_desfire_tag *tag, mifare_desfire_aid_t *aid);
+	StatusCode MIFARE_DESFIRE_GetFileIDs(mifare_desfire_tag *tag, byte *files, byte *filesCount);
+	StatusCode MIFARE_DESFIRE_GetFileSettings(mifare_desfire_tag *tag, byte *file, mifare_desfire_file_settings_t *fileSettings);
+	StatusCode MIFARE_DESFIRE_GetKeySettings(mifare_desfire_tag *tag, byte *settings, byte *maxKeys);
+	StatusCode MIFARE_DESFIRE_GetKeyVersion(mifare_desfire_tag *tag, byte key, byte *version);
 
 	
 	/////////////////////////////////////////////////////////////////////////////////////
 	// Data manipulation commands
 	/////////////////////////////////////////////////////////////////////////////////////
-	StatusCode MIFARE_DESFIRE_ReadData(byte fid, uint32_t offset, uint32_t length, byte *backData, size_t *backLen);
-	StatusCode MIFARE_DESFIRE_GetValue(byte fid, int32_t *value);
+	StatusCode MIFARE_DESFIRE_ReadData(mifare_desfire_tag *tag, byte fid, uint32_t offset, uint32_t length, byte *backData, size_t *backLen);
+	StatusCode MIFARE_DESFIRE_GetValue(mifare_desfire_tag *tag, byte fid, int32_t *value);
 
 	/////////////////////////////////////////////////////////////////////////////////////
 	// Support functions
@@ -165,24 +170,15 @@ public:
 	/////////////////////////////////////////////////////////////////////////////////////
 	// Functions for debugging
 	/////////////////////////////////////////////////////////////////////////////////////
-	void PICC_DumpMifareDesfireMasterKey();
-	void PICC_DumpMifareDesfireVersion(MIFARE_DESFIRE_Version_t *versionInfo);
-	void PICC_DumpMifareDesfireApplication(mifare_desfire_aid_t *aid);
+	void PICC_DumpMifareDesfireMasterKey(mifare_desfire_tag *tag);
+	void PICC_DumpMifareDesfireVersion(mifare_desfire_tag *tag, MIFARE_DESFIRE_Version_t *versionInfo);
+	void PICC_DumpMifareDesfireApplication(mifare_desfire_tag *tag, mifare_desfire_aid_t *aid);
 
 protected:
 	/////////////////////////////////////////////////////////////////////////////////////
 	// Helper methods
 	/////////////////////////////////////////////////////////////////////////////////////
-	byte GetPCB() {
-		// 0A = 1010
-		// 0B = 1011
-		if (m_pcb == 0x0A)
-			m_pcb = 0x0B;
-		else
-			m_pcb = 0x0A;
-
-		return m_pcb;
-	};
+	
 
 private:
 	byte m_pcb;

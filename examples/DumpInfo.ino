@@ -71,7 +71,11 @@ void loop() {
   // Show an extra line
   Serial.println();
 
+  DESFire::mifare_desfire_tag tag;
   DESFire::StatusCode response;
+
+  tag.pcb = 0x0A;
+  tag.cid = 0x00;
 
   // Make sure none DESFire status codes have DESFireStatus code to OK
   response.desfire = DESFire::MF_OPERATION_OK;
@@ -100,7 +104,7 @@ void loop() {
 
   // MIFARE DESFire should respond to a GetVersion command
   DESFire::MIFARE_DESFIRE_Version_t desfireVersion;
-  response = mfrc522.MIFARE_DESFIRE_GetVersion(&desfireVersion);
+  response = mfrc522.MIFARE_DESFIRE_GetVersion(&tag, &desfireVersion);
   if ( ! mfrc522.IsStatusCodeOK(response)) {
     Serial.println(F("Failed to get a response for GetVersion!"));
     Serial.println(mfrc522.GetStatusCodeName(response));
@@ -113,14 +117,13 @@ void loop() {
   //       This method takes some time and the card will be read
   //       once output ends! If you remove the card too fast
   //       a timeout will occur!
-  mfrc522.PICC_DumpMifareDesfireVersion(&desfireVersion);
+  mfrc522.PICC_DumpMifareDesfireVersion(&tag, &desfireVersion);
 
-  // Dump AID (0x000000)
-  mfrc522.PICC_DumpMifareDesfireMasterKey();
+  mfrc522.PICC_DumpMifareDesfireMasterKey(&tag);
 
   DESFire::mifare_desfire_aid_t aids[MIFARE_MAX_APPLICATION_COUNT];
   byte applicationCount = 0;
-  response = mfrc522.MIFARE_DESFIRE_GetApplicationIds(aids, &applicationCount);
+  response = mfrc522.MIFARE_DESFIRE_GetApplicationIds(&tag, aids, &applicationCount);
   if ( ! mfrc522.IsStatusCodeOK(response)) {
     Serial.println(F("Failed to get application IDs!"));
     Serial.println(mfrc522.GetStatusCodeName(response));
@@ -130,7 +133,7 @@ void loop() {
 
   // Dump all applications
   for (byte aidIndex = 0; aidIndex < applicationCount; aidIndex++) {
-    mfrc522.PICC_DumpMifareDesfireApplication(&(aids[aidIndex]));
+    mfrc522.PICC_DumpMifareDesfireApplication(&tag, &(aids[aidIndex]));
   }
   
   // Call PICC_HaltA()
