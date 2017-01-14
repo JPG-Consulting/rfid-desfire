@@ -87,7 +87,7 @@ public:
 	} MIFARE_DESFIRE_Version_t;
 
 	typedef struct {
-		uint8_t data[3];
+		uint8_t data[MIFARE_AID_SIZE];
 	} mifare_desfire_aid_t;
 
 	typedef struct {
@@ -122,7 +122,7 @@ public:
 	typedef struct {
 		byte cid;	// Card ID
 		byte pcb;	// Protocol Control Byte
-		byte selected_application[3];
+		byte selected_application[MIFARE_AID_SIZE];
 	} mifare_desfire_tag;
 
 	/////////////////////////////////////////////////////////////////////////////////////

@@ -184,16 +184,16 @@ DESFire::StatusCode DESFire::MIFARE_DESFIRE_SelectApplication(mifare_desfire_tag
 	StatusCode result;
 
 	byte buffer[64];
-	byte bufferSize = 3;
+	byte bufferSize = MIFARE_AID_SIZE;
 	
-	buffer[0] = aid->data[0];
-	buffer[1] = aid->data[1];
-	buffer[2] = aid->data[2];
-
+	for (byte i = 0; i < MIFARE_AID_SIZE; i++) {
+		buffer[i] = aid->data[i];
+	}
+	
 	result = MIFARE_BlockExchangeWithData(tag, 0x5A, buffer, &bufferSize, buffer, &bufferSize);
 	if (IsStatusCodeOK(result)) {
 		// keep track of the application
-		memcpy(tag->selected_application, aid->data, 3);
+		memcpy(tag->selected_application, aid->data, MIFARE_AID_SIZE);
 	}
 
 	return result;
@@ -203,8 +203,8 @@ DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetFileIDs(mifare_desfire_tag *tag, 
 {
 	StatusCode result;
 	
-	byte buffer[255];
-	byte bufferSize = 255;
+	byte bufferSize = MIFARE_MAX_FILE_COUNT + 5;
+	byte buffer[bufferSize];
 
 	result = MIFARE_BlockExchange(tag, 0x6F, buffer, &bufferSize);
 	if (IsStatusCodeOK(result)) {
@@ -352,35 +352,60 @@ DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetApplicationIds(mifare_desfire_tag
 {
 	StatusCode result;
 	
-	byte buffer[255];
-	byte bufferSize = 255;
+	// MIFARE_MAX_APPLICATION_COUNT * MIFARE_AID_SIZE + PCB (1 byte) + CID (1 byte) + Checksum (2 bytes)
+	// I also add an extra byte in case NAD is needed
+	byte bufferSize = (MIFARE_MAX_APPLICATION_COUNT * MIFARE_AID_SIZE) + 5;
+	byte buffer[bufferSize]; 
+	byte aidBuffer[MIFARE_MAX_APPLICATION_COUNT * MIFARE_AID_SIZE];
+	byte aidBufferSize = 0;
 
 	result = MIFARE_BlockExchange(tag, 0x6A, buffer, &bufferSize);
-	if (IsStatusCodeOK(result)) {
-		if (bufferSize == 0x00) {
-			// Empty application list
-			return result;
-		}
-
-		// Applications are identified with a 3 byte application identifier(AID)
-		// we also received the status byte:
-		if ((bufferSize % 3) != 0) {
-			Serial.println(F("MIFARE_DESFIRE_GetApplicationIds(): Data is not a modulus of 3."));
-			// TODO: Some kinf of failure
-			result.mfrc522 = STATUS_ERROR;
-			return result;
-		}
-
-		*applicationCount = bufferSize / 3;
+	if (result.mfrc522 != STATUS_OK)
+		return result;
 		
-		for (byte i = 0; i < *applicationCount; i++) {
-			aids[i].data[0] = buffer[(i * 3)];
-			aids[i].data[1] = buffer[1 + (i * 3)];
-			aids[i].data[2] = buffer[2 + (i * 3)];
+	// MIFARE_MAX_APPLICATION_COUNT (28) * MIFARE_AID_SIZE + PCB (1) + CID (1) + Checksum (2) = 88
+	// Even if the NAD byte is not present we could GET a 0xAF response.
+	if (result.desfire == MF_OPERATION_OK && bufferSize == 0x00) {
+		// Empty application list
+		*applicationCount = 0;
+		return result;
+	}
+
+	memcpy(aidBuffer, buffer, bufferSize);
+	aidBufferSize = bufferSize;
+
+	while (result.desfire == MF_ADDITIONAL_FRAME) {
+		bufferSize = (MIFARE_MAX_APPLICATION_COUNT * MIFARE_AID_SIZE) + 5;
+		result = MIFARE_BlockExchange(tag, 0xAF, buffer, &bufferSize);
+		if (result.mfrc522 != STATUS_OK)
+			return result;
+
+		// Make sure we have space (Just in case)
+		if ((aidBufferSize + bufferSize) > (MIFARE_MAX_APPLICATION_COUNT * MIFARE_AID_SIZE)) {
+			result.mfrc522 = STATUS_NO_ROOM;
+			return result;
 		}
-	} else {
-		Serial.println("Application IDs: Failure.");
-		Serial.println(GetStatusCodeName(result));
+
+		// Append the new data
+		memcpy(aidBuffer + aidBufferSize, buffer, bufferSize);
+	}
+	
+
+	// Applications are identified with a 3 byte application identifier(AID)
+	// we also received the status byte:
+	if ((aidBufferSize % 3) != 0) {
+		Serial.println(F("MIFARE_DESFIRE_GetApplicationIds(): Data is not a modulus of 3."));
+		// TODO: Some kind of failure
+		result.mfrc522 = STATUS_ERROR;
+		return result;
+	}
+
+	*applicationCount = aidBufferSize / 3;
+		
+	for (byte i = 0; i < *applicationCount; i++) {
+		aids[i].data[0] = aidBuffer[(i * 3)];
+		aids[i].data[1] = aidBuffer[1 + (i * 3)];
+		aids[i].data[2] = aidBuffer[2 + (i * 3)];
 	}
 
 	return result;
