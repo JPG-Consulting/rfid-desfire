@@ -63,13 +63,34 @@ MFRC522::StatusCode DESFire::PICC_ProtocolAndParameterSelection(byte cid,	///< T
 } // End PICC_ProtocolAndParameterSelection()
 
 /**
- * Documentation: http://read.pudn.com/downloads64/ebook/225463/M305_DESFireISO14443.pdf
+ * @see MIFARE_BlockExchangeWithData()
  */
 DESFire::StatusCode DESFire::MIFARE_BlockExchange(mifare_desfire_tag *tag, byte cmd, byte *backData, byte *backLen)
 {
 	return MIFARE_BlockExchangeWithData(tag, cmd, NULL, NULL, backData, backLen);
 } // End MIFARE_BlockExchange()
 
+/**
+ *
+ * Frame Format for DESFire APDUs
+ * ==============================
+ *
+ * The frame format for DESFire APDUs is based on only the ISO 14443-4 specifications for block formats.
+ * This is the format used by the example firmware, and seen in Figure 3.
+ *  - PCB – Protocol Control Byte, this byte is used to transfer format information about each PDU block.
+ *  - CID – Card Identifier field, this byte is used to identify specific tags. It contains a 4 bit CID value as well
+ *          as information on the signal strength between the reader and the tag.
+ *  - NAD – Node Address field, the example firmware does not support the use of NAD.
+ *  - DESFire Command Code – This is discussed in the next section.
+ *  - Data Bytes – This field contains all of the Data Bytes for the command
+ *
+ *  |-----|-----|-----|---------|------|----------|
+ *  | PCB | CID | NAD | Command | Data | Checksum |
+ *  |-----|-----|-----|---------|------|----------|
+ *
+ * Documentation: http://read.pudn.com/downloads64/ebook/225463/M305_DESFireISO14443.pdf
+ *                http://www.ti.com.cn/cn/lit/an/sloa213/sloa213.pdf
+ */
 DESFire::StatusCode DESFire::MIFARE_BlockExchangeWithData(mifare_desfire_tag *tag, byte cmd, byte *sendData, byte *sendLen, byte *backData, byte *backLen)
 {
 	StatusCode result;
@@ -304,10 +325,13 @@ DESFire::StatusCode DESFire::MIFARE_DESFIRE_ReadData(mifare_desfire_tag *tag, by
 	byte sendLen = 7;
 	size_t outSize = 0;
 
+	// file ID
 	buffer[0] = fid;
+	// offset
 	buffer[1] = (offset & 0x00000F);
 	buffer[2] = (offset & 0x00FF00) >> 8;
 	buffer[3] = (offset & 0xFF0000) >> 16;
+	// length
 	buffer[4] = (length & 0x0000FF);
 	buffer[5] = (length & 0x00FF00) >> 8;
 	buffer[6] = (length & 0xFF0000) >> 16;
