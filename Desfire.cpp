@@ -190,7 +190,13 @@ DESFire::StatusCode DESFire::MIFARE_DESFIRE_SelectApplication(mifare_desfire_tag
 	buffer[1] = aid->data[1];
 	buffer[2] = aid->data[2];
 
-	return MIFARE_BlockExchangeWithData(tag, 0x5A, buffer, &bufferSize, buffer, &bufferSize);
+	result = MIFARE_BlockExchangeWithData(tag, 0x5A, buffer, &bufferSize, buffer, &bufferSize);
+	if (IsStatusCodeOK(result)) {
+		// keep track of the application
+		memcpy(tag->selected_application, aid->data, 3);
+	}
+
+	return result;
 }
 
 DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetFileIDs(mifare_desfire_tag *tag, byte *files, byte *filesCount)

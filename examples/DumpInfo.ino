@@ -76,6 +76,7 @@ void loop() {
 
   tag.pcb = 0x0A;
   tag.cid = 0x00;
+  memset(tag.selected_application, 0, 3);
 
   // Make sure none DESFire status codes have DESFireStatus code to OK
   response.desfire = DESFire::MF_OPERATION_OK;

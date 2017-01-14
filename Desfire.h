@@ -122,6 +122,7 @@ public:
 	typedef struct {
 		byte cid;	// Card ID
 		byte pcb;	// Protocol Control Byte
+		byte selected_application[3];
 	} mifare_desfire_tag;
 
 	/////////////////////////////////////////////////////////////////////////////////////
