@@ -240,8 +240,8 @@ DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetFileSettings(mifare_desfire_tag *
 {
 	StatusCode result;
 
-	byte buffer[64];
-	byte bufferSize = 64;
+	byte buffer[21];
+	byte bufferSize = 21;
 	byte sendLen = 1;
 
 	buffer[0] = *file;
@@ -286,8 +286,8 @@ DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetKeySettings(mifare_desfire_tag *t
 {
 	StatusCode result;
 
-	byte buffer[64];
-	byte bufferSize = 64;
+	byte buffer[7];
+	byte bufferSize = 7;
 
 	result = MIFARE_BlockExchange(tag, 0x45, buffer, &bufferSize);
 	if (IsStatusCodeOK(result)) {
@@ -302,8 +302,8 @@ DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetKeyVersion(mifare_desfire_tag *ta
 {
 	StatusCode result;
 
-	byte buffer[64];
-	byte bufferSize = 64;
+	byte buffer[6];
+	byte bufferSize = 6;
 	byte sendLen = 1;
 
 	buffer[0] = key;
@@ -357,8 +357,8 @@ DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetValue(mifare_desfire_tag *tag, by
 {
 	StatusCode result;
 
-	byte buffer[64];
-	byte bufferSize = 64;
+	byte buffer[MFRC522::FIFO_SIZE];
+	byte bufferSize = MFRC522::FIFO_SIZE;
 	byte sendLen = 1;
 	size_t outSize = 0;
 
