@@ -3,7 +3,8 @@
 
 #include <Arduino.h>
 #include <SPI.h>
-#include <MFRC522.h>
+#include <MFRC522.h>	// https://github.com/miguelbalboa/rfid
+#include <DES.h>		// https://github.com/spaniakos/ArduinoDES/
 
 /* --------------------------------------
 * DESFire Logical Structure
@@ -13,6 +14,8 @@
 #define MIFARE_MAX_FILE_COUNT        16 /* max # of files in each application */
 #define MIFARE_UID_BYTES             7  /* number of UID bytes */
 #define MIFARE_AID_SIZE              3  /* number of AID bytes */
+
+#define MAX_CRYPTO_BLOCK_SIZE  16
 
 class DESFire : public MFRC522 {
 public:
@@ -56,6 +59,13 @@ public:
 		MDCM_PLAIN      = 0x00,    /* Plain Communication */
 		MDCM_MACED      = 0x01,    /* Plain Comm secured by DES/3DES MACing */
 		MDCM_ENCIPHERED = 0x03    /* Fully DES/3DES enciphered comm. */
+	};
+
+	// DESFire authentication commands
+	enum mifare_desfire_authentication_command : byte {
+		MF_AUTHENTICATE_LEGACY = 0x0A,
+		MF_AUTHENTICATE_ISO    = 0x1A,
+		MF_AUTHENTICATE_AES    = 0xAA
 	};
 
 	// A struct used for passing a MIFARE DESFire Version 
@@ -122,8 +132,19 @@ public:
 	typedef struct {
 		byte cid;	// Card ID
 		byte pcb;	// Protocol Control Byte
+		byte ivect[MAX_CRYPTO_BLOCK_SIZE];         /* init vector for CBC */
 		byte selected_application[MIFARE_AID_SIZE];
 	} mifare_desfire_tag;
+
+	typedef struct {
+		uint8_t data[24];
+		enum {
+			T_DES,              /* 56-bit DES (single DES, DES) */
+			T_3DES,             /* 112-bit 3DES (triple DES, 2K3DES) */
+			T_3K3DES,           /* 168-bit 3DES (3 key triple DES, 3K3DES) */
+			T_AES               /* AES-128 */
+		} type;
+	} mifare_desfire_key_t;
 
 	/////////////////////////////////////////////////////////////////////////////////////
 	// Functions for setting up the Arduino
@@ -146,6 +167,11 @@ public:
 	StatusCode MIFARE_DESFIRE_SelectApplication(mifare_desfire_tag *tag, mifare_desfire_aid_t *aid);
 	StatusCode MIFARE_DESFIRE_GetKeySettings(mifare_desfire_tag *tag, byte *settings, byte *maxKeys);
 	StatusCode MIFARE_DESFIRE_GetKeyVersion(mifare_desfire_tag *tag, byte key, byte *version);
+
+	/////////////////////////////////////////////////////////////////////////////////////
+	// MIFARE DESFire security commands
+	/////////////////////////////////////////////////////////////////////////////////////
+	StatusCode MIFARE_DESFIRE_Authenticate(mifare_desfire_tag *tag, byte key_no, mifare_desfire_key_t *key);
 
 	/////////////////////////////////////////////////////////////////////////////////////
 	// MIFARE DESFire application level commands
@@ -182,6 +208,24 @@ protected:
 	/////////////////////////////////////////////////////////////////////////////////////
 	StatusCode MIFARE_BlockExchange(mifare_desfire_tag *tag, byte cmd, byte *backData = NULL, byte *backLen = NULL);
 	StatusCode MIFARE_BlockExchangeWithData(mifare_desfire_tag *tag, byte cmd, byte *sendData = NULL, byte *sendLen = NULL, byte *backData = NULL, byte *backLen = NULL);
+
+private:
+	/////////////////////////////////////////////////////////////////////////////////////
+	// Crypto Functions
+	/////////////////////////////////////////////////////////////////////////////////////
+	void Xor(byte *ivect, byte *data, size_t len) {
+		size_t i; /* index into arrays */
+		for (i = 0; i < len; i++)
+			data[i] ^= ivect[i];
+	};
+
+	size_t KeyBlockSize(mifare_desfire_key_t *key);
+	void MifareDecipherSingleBlock(mifare_desfire_key_t *key, uint8_t *data, uint8_t *ivect, size_t block_size);
+	void MifareCipherSingleBlock(mifare_desfire_key_t *key, uint8_t *data, uint8_t *ivect, size_t block_size);
+	void MifareCipherBlocksChained(mifare_desfire_key_t *key, uint8_t *ivect, uint8_t *data, size_t data_size);
+
+	/* ROL operation */
+	void Rol(uint8_t *data, size_t len);
 };
 
 #endif

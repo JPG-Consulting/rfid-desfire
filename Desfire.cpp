@@ -316,6 +316,135 @@ DESFire::StatusCode DESFire::MIFARE_DESFIRE_GetKeyVersion(mifare_desfire_tag *ta
 	return result;
 }
 
+DESFire::StatusCode DESFire::MIFARE_DESFIRE_Authenticate(mifare_desfire_tag *tag, byte key_no, mifare_desfire_key_t *key)
+{
+	StatusCode response;
+	byte buffer[64];
+	byte bufferSize = 64;
+	byte sendLen = 1;
+
+	size_t key_length;
+
+	byte RndA[16];
+	byte PICC_E_RndB[16];
+	byte PICC_RndB[16];
+
+	uint8_t PCD_RndA[16];                      /* RndA from PCD */
+	uint8_t PCD_r_RndB[16];                    /* RndB': rotated RndB */
+
+	uint8_t token[32];                         /* for dK(RndA+RndB') */
+
+	buffer[0] = key_no;
+
+	// Send authentication command
+	response = MIFARE_BlockExchangeWithData(tag, MF_AUTHENTICATE_LEGACY, buffer, &sendLen, buffer, &bufferSize);
+	if (!response.mfrc522 == STATUS_OK)
+		return response;
+
+	key_length = bufferSize;
+
+	Serial.print(F("Status: "));
+	Serial.println(GetStatusCodeName(response));
+
+	Serial.print(F("Bytes received:"));
+	for (byte i = 0; i < bufferSize; i++) {
+		if (buffer[i] < 0x10)
+			Serial.print(F(" 0"));
+		else
+			Serial.print(F(" "));
+		Serial.print(buffer[i], HEX);
+	}
+	Serial.println();
+
+	// store encrypted RndB
+	memcpy(PICC_E_RndB, buffer, bufferSize);
+
+	// Decypher
+	//uint8_t ivect[] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+	memset(tag->ivect, 0, MAX_CRYPTO_BLOCK_SIZE);
+	MifareDecipherSingleBlock(key, buffer, tag->ivect, bufferSize);
+
+	memcpy(PICC_RndB, buffer, bufferSize);
+
+	Serial.print(F("          RndB:"));
+	for (byte i = 0; i < bufferSize; i++) {
+		if (PICC_RndB[i] < 0x10)
+			Serial.print(F(" 0"));
+		else
+			Serial.print(F(" "));
+		Serial.print(PICC_RndB[i], HEX);
+	}
+	Serial.println();
+
+	// Generate RndA
+	for (byte i = 0; i < bufferSize; i++) {
+		PCD_RndA[i] = random(0, 255);
+	}
+
+	Serial.print(F("          RndA:"));
+	for (byte i = 0; i < bufferSize; i++) {
+		if (PCD_RndA[i] < 0x10)
+			Serial.print(F(" 0"));
+		else
+			Serial.print(F(" "));
+		Serial.print(PCD_RndA[i], HEX);
+	}
+	Serial.println();
+
+	memcpy(PCD_r_RndB, PICC_RndB, bufferSize); /* RndB' = Rol(RndB) */
+	Rol(PCD_r_RndB, bufferSize);
+
+	Serial.print(F("   Rolled RndB:"));
+	for (byte i = 0; i < bufferSize; i++) {
+		if (PCD_r_RndB[i] < 0x10)
+			Serial.print(F(" 0"));
+		else
+			Serial.print(F(" "));
+		Serial.print(PCD_r_RndB[i], HEX);
+	}
+	Serial.println();
+
+	memcpy(token, PCD_RndA, bufferSize);       /* set token = dK(RndA + RndB') */
+	memcpy(token + bufferSize, PCD_r_RndB, bufferSize);
+
+	Serial.print(F("         Token:"));
+	for (byte i = 0; i < bufferSize * 2; i++) {
+		if (token[i] < 0x10)
+			Serial.print(F(" 0"));
+		else
+			Serial.print(F(" "));
+		Serial.print(token[i], HEX);
+	}
+	Serial.println();
+
+	// Cipher token
+	MifareCipherBlocksChained(key, tag->ivect, token, 2 * key_length);
+
+	Serial.print(F("Ciphered Token:"));
+	for (byte i = 0; i < bufferSize * 2; i++) {
+		if (token[i] < 0x10)
+			Serial.print(F(" 0"));
+		else
+			Serial.print(F(" "));
+		Serial.print(token[i], HEX);
+	}
+	Serial.println();
+
+	// Send the ciphered token
+	bufferSize = 64;
+	sendLen = key_length * 2;
+	memcpy(buffer, token, key_length * 2);
+
+	response = MIFARE_BlockExchangeWithData(tag, 0xAF, buffer, &sendLen, buffer, &bufferSize);
+	if (response.mfrc522 == STATUS_OK) {
+		Serial.print(F("        Status:"));
+		Serial.println(GetStatusCodeName(response));
+	}
+
+	Serial.print(F("        Status:"));
+	Serial.println(GetStatusCodeName(response));
+} // End MIFARE_DESFIRE_Authenticate()
+
 DESFire::StatusCode DESFire::MIFARE_DESFIRE_ReadData(mifare_desfire_tag *tag, byte fid, uint32_t offset, uint32_t length, byte *backData, size_t *backLen)
 {
 	StatusCode result;
@@ -968,4 +1097,189 @@ void DESFire::PICC_DumpMifareDesfireApplication(mifare_desfire_tag *tag, mifare_
 
 
 	Serial.println(F("-------------------------------------------------------------"));
+}
+
+
+/*
+* KeyBlockSize
+* Description: Get MIFARE DESFire key block size
+*
+* Arguments:   key       = block cipher key
+* Return:      block_size = key block size
+*
+* Operation:   If crypto operation is DES, 3DES, 3K3DES the block size is 8,
+*              else if crypto operation is AES the block size is 16.
+*
+* Revision History:
+*   Jan. 05, 2012      Nnoduka Eruchalu     Initial Revision
+*/
+size_t DESFire::KeyBlockSize(mifare_desfire_key_t *key)
+{
+	size_t block_size;
+
+	switch (key->type) {
+	case mifare_desfire_key_t::T_DES:          /* if crypto operation is DES, 3DES, 3K3DES  */
+	case mifare_desfire_key_t::T_3DES:         /* the block size is 8 */
+	case mifare_desfire_key_t::T_3K3DES:
+		block_size = 8;
+		break;
+	case mifare_desfire_key_t::T_AES:          /* if crypto operation is AES, the block size is 16 */
+		block_size = 16;
+		break;
+	}
+	return block_size;
+}
+
+
+void DESFire::MifareDecipherSingleBlock(mifare_desfire_key_t *key, uint8_t *data, uint8_t *ivect, size_t block_size)
+{
+	DES des;
+	unsigned long long int iv;
+	uint8_t ovect[MAX_CRYPTO_BLOCK_SIZE];
+	uint8_t edata[MAX_CRYPTO_BLOCK_SIZE];
+
+	memcpy(&iv, ivect, 8);
+	des.set_IV(iv);
+
+	memcpy(ovect, data, block_size); /* copy data into ovect */
+
+	switch (key->type) {
+	case mifare_desfire_key_t::T_DES:
+		des.decrypt(edata, data, key->data);
+		break;
+	default:
+		Serial.println(F("Error: Unknown key type."));
+		return;
+	}
+
+	memcpy(data, edata, block_size);
+
+	//Serial.print(F("Deciphered:"));
+	//for (byte i = 0; i < block_size; i++) {
+	//	if (data[i] < 0x10)
+	//		Serial.print(F(" 0"));
+	//	else
+	//		Serial.print(F(" "));
+	//	Serial.print(data[i], HEX);
+	//}
+	//Serial.println();
+
+	Xor(ivect, data, block_size);     /* xor ivect into data */
+	memcpy(ivect, ovect, block_size);/* copy ovect into ivect */
+
+									 //Serial.print(F("XORed:"));
+									 //for (byte i = 0; i < block_size; i++) {
+									 //	if (data[i] < 0x10)
+									 //		Serial.print(F(" 0"));
+									 //	else
+									 //		Serial.print(F(" "));
+									 //	Serial.print(data[i], HEX);
+									 //}
+									 //Serial.println();
+}
+
+void DESFire::MifareCipherSingleBlock(mifare_desfire_key_t *key, uint8_t *data, uint8_t *ivect, size_t block_size)
+{
+	DES des;
+	unsigned long long int iv;
+	uint8_t ovect[MAX_CRYPTO_BLOCK_SIZE];
+	uint8_t edata[MAX_CRYPTO_BLOCK_SIZE];
+
+	memcpy(&iv, ivect, 8);
+	des.set_IV(iv);
+
+	Xor(ivect, data, block_size);		/* xor ivect into data */
+
+	switch (key->type) {
+	case mifare_desfire_key_t::T_DES:
+		des.encrypt(edata, data, key->data);
+		break;
+	default:
+		Serial.println(F("Error: Unknown key type."));
+		return;
+	}
+
+	memcpy(data, edata, block_size);
+
+	//Serial.print(F("Deciphered:"));
+	//for (byte i = 0; i < block_size; i++) {
+	//	if (data[i] < 0x10)
+	//		Serial.print(F(" 0"));
+	//	else
+	//		Serial.print(F(" "));
+	//	Serial.print(data[i], HEX);
+	//}
+	//Serial.println();
+
+	memcpy(ivect, data, block_size); /* copy data into ivect */
+
+									 //Serial.print(F("XORed:"));
+									 //for (byte i = 0; i < block_size; i++) {
+									 //	if (data[i] < 0x10)
+									 //		Serial.print(F(" 0"));
+									 //	else
+									 //		Serial.print(F(" "));
+									 //	Serial.print(data[i], HEX);
+									 //}
+									 //Serial.println();
+}
+
+void DESFire::MifareCipherBlocksChained(mifare_desfire_key_t *key, uint8_t *ivect, uint8_t *data, size_t data_size)
+{
+	size_t block_size;
+	size_t offset = 0;
+
+	//if (tag) {                          /* if tag is defined and key isn't set */
+	//	if (!key)                         /* key to tag's session key */
+	//		key = &tag->session_key;
+	//	if (!ivect)                       /* if tag is defined and ivect isn't */
+	//		ivect = tag->ivect;            /* set ivect to tag's ivect */
+	//
+	//	switch (tag->authentication_scheme) {
+	//	case AS_LEGACY:                  /* if legacy auth scheme, ivect = all 0s */
+	//		memset(ivect, 0, MAX_CRYPTO_BLOCK_SIZE);
+	//		break;
+	//	case AS_NEW:
+	//		break;
+	//	}
+	//}
+
+	if (!key || !ivect)                /* if no key or ivect defined, there is */
+		return;                          /* a problem so abort */
+
+	block_size = KeyBlockSize(key);    /* get key block size for block ciphers */
+
+	while (offset < data_size) {       /* Cipher contiguous data blocks */
+		MifareCipherSingleBlock(key, data + offset, ivect, block_size);
+		offset += block_size;
+	}
+}
+
+/*
+* Rol
+* Description: Rotate Byte left. (Move MSByte over to LSByte position, and
+*              shift up other bytes)
+*              Ex: Rol {0,1,2,3,4} = {1,2,3,4,0}
+*
+* Arguments:   data = pointer to data block [modified]
+*              len  = length of data block
+* Return:      None
+*
+* Operation:   Copy first byte; shift all other bytes down one index, and place
+*              first byte in now empty last slot.
+*
+* Assumptions: MSByte is at index 0
+*
+* Revision History:
+*   Jan. 03, 2012      Nnoduka Eruchalu     Initial Revision
+*   May  03, 2013      Nnoduka Eruchalu     Updated Comments
+*/
+void DESFire::Rol(uint8_t *data, size_t len)
+{
+	size_t i;       /* index into data */
+	uint8_t first = data[0];
+	for (i = 0; i < len - 1; i++) {
+		data[i] = data[i + 1];
+	}
+	data[len - 1] = first;
 }
