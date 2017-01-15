@@ -144,14 +144,17 @@ public:
 	StatusCode MIFARE_DESFIRE_GetVersion(mifare_desfire_tag *tag, MIFARE_DESFIRE_Version_t *versionInfo);
 	StatusCode MIFARE_DESFIRE_GetApplicationIds(mifare_desfire_tag *tag, mifare_desfire_aid_t *aids, byte *applicationCount);
 	StatusCode MIFARE_DESFIRE_SelectApplication(mifare_desfire_tag *tag, mifare_desfire_aid_t *aid);
-	StatusCode MIFARE_DESFIRE_GetFileIDs(mifare_desfire_tag *tag, byte *files, byte *filesCount);
-	StatusCode MIFARE_DESFIRE_GetFileSettings(mifare_desfire_tag *tag, byte *file, mifare_desfire_file_settings_t *fileSettings);
 	StatusCode MIFARE_DESFIRE_GetKeySettings(mifare_desfire_tag *tag, byte *settings, byte *maxKeys);
 	StatusCode MIFARE_DESFIRE_GetKeyVersion(mifare_desfire_tag *tag, byte key, byte *version);
 
-	
 	/////////////////////////////////////////////////////////////////////////////////////
-	// Data manipulation commands
+	// MIFARE DESFire application level commands
+	/////////////////////////////////////////////////////////////////////////////////////
+	StatusCode MIFARE_DESFIRE_GetFileIDs(mifare_desfire_tag *tag, byte *files, byte *filesCount);
+	StatusCode MIFARE_DESFIRE_GetFileSettings(mifare_desfire_tag *tag, byte *file, mifare_desfire_file_settings_t *fileSettings);
+
+	/////////////////////////////////////////////////////////////////////////////////////
+	// MIFARE DESFire data manipulation commands
 	/////////////////////////////////////////////////////////////////////////////////////
 	StatusCode MIFARE_DESFIRE_ReadData(mifare_desfire_tag *tag, byte fid, uint32_t offset, uint32_t length, byte *backData, size_t *backLen);
 	StatusCode MIFARE_DESFIRE_GetValue(mifare_desfire_tag *tag, byte fid, int32_t *value);
